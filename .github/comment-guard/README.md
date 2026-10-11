@@ -44,6 +44,11 @@
 - **任何命中都留痕**：Actions 日志 + Job Summary；high 档额外汇总到一个固定标题的 Issue
   （`评论自动审核记录（comment-guard）`），GitHub 会给主人发邮件。
 - **不在讨论里公开回复**（避免打草惊蛇 / 误伤场面）——这是刻意的。
+- **新讨论的正文最多只隐藏，绝不删**：`discussion` 事件抓的是"整条讨论"而不是某条评论，
+  删讨论会连带删掉它下面**所有**评论（包括正常读者的）。所以正文即使规则判 `high(delete)`，
+  也自动降级为 `minimize`，日志里会打 `[note] 目标是讨论正文 → 降级为 minimize`，
+  返回结果里 `verdict: "delete"` 与 `action: "minimize"` 分开记，谁也别猜。
+  对应的回归用例是 `test-runner-offline.js` 的 `R7`。
 
 ## 规则清单（分组 / 权重 / 理由 / 误报风险）
 
@@ -138,4 +143,7 @@ node .github/comment-guard/test-runner-offline.js   # 端到端干跑，确认�
 
 - 工作流权限：`contents: read`、`discussions: write`、`issues: write`。
 - 用默认的 `GITHUB_TOKEN`，不引入任何第三方 action、不引入 npm 依赖（只用 Node 标准库）。
-- 只读事件载荷 + 只调用上面列出的四个 mutation；**不修改 Discussions 分类设置、不动已有讨论**。
+- 只读事件载荷 + 只调用上面列出的几个 mutation；**不修改 Discussions 分类设置、不动已有讨论**。
+- **事件载荷通过环境变量传**（`EVENT_JSON: ${{ toJSON(github.event) }}`），不拼进 `run:` 的 shell 命令。
+  评论正文是**不可信输入**：里面只要有一个单引号，`echo '...'` 的引号配对就断了（轻则 job 报错，
+  重则是命令注入）。放进 `env` 不经过 shell 解析，然后由 `printf '%s'` 原样写进文件，安全。

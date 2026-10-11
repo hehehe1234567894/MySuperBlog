@@ -43,9 +43,12 @@ jobs:
           # 默认 1（只看不动）。想开启真实动作 → 仓库变量 COMMENT_GUARD_DRY_RUN=0
           COMMENT_GUARD_DRY_RUN: ${{ vars.COMMENT_GUARD_DRY_RUN || '1' }}
           EVENT_NAME: ${{ github.event_name }}
+          # 事件载荷通过 **环境变量** 传给脚本，绝不拼进 shell 命令：
+          # 评论正文是不可信输入，里面一个单引号就能把 `echo '...'` 的引号配对打破（
+          # 轻则 job 报错，重则是命令注入）。放进 env 不经过 shell 解析，安全。
+          EVENT_JSON: ${{ toJSON(github.event) }}
         run: |
           set -euo pipefail
           node --version
-          # 事件载荷放到文件里传，避免把大 JSON 塞进环境变量
-          echo '${{ toJSON(github.event) }}' > /tmp/event.json
+          printf '%s' "$EVENT_JSON" > /tmp/event.json
           node .github/comment-guard/runner.js --event /tmp/event.json --event-name "$EVENT_NAME"

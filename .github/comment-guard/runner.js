@@ -181,10 +181,10 @@ async function recordToIssue(line) {
 
 const cfg = loadRules();
 
-function summaryLine(ev, res, actResult) {
+function summaryLine(ev, res, actResult, effectiveAction) {
   const hits = res.matched.map((m) => `${m.group}:${m.detail.word || m.detail.pattern || m.detail.kind || ''}`).join(', ');
   return [
-    `- **${res.tier}** / \`${res.action}\` / 分 ${res.score}`,
+    `- **${res.tier}** / \`${effectiveAction}\` / 分 ${res.score}` + (effectiveAction !== res.action ? `（规则判定 \`${res.action}\`，因目标是讨论正文降级）` : ''),
     `  - 讨论：${ev.discussionTitle || '(未知)'} #${ev.discussionNumber || '?'}`,
     `  - 作者：@${ev.author}`,
     `  - 命中：${hits}`,
@@ -223,24 +223,39 @@ async function run({ eventName, payload, dryOverride }) {
     log(`        正文摘要：${require('./engine').mask(ev.body, 30)}`);
   }
 
+  // 目标是"新讨论的正文"还是"评论"？两者可用动作不同：
+  // Discussion 也实现了 Minimizable，所以能隐藏；但删整个讨论会连带删掉它下面所有评论，太粗暴，
+  // 所以 discussion 正文最高只做到 minimize —— 宁可少管，不可误删一片。
+  const isDiscussion = ev.kind === 'discussion';
   const actions = { label: null, minimize: null, delete: null };
-  if (res.action === 'label') actions.label = await addLabel(ev.id, cfg.actions.labels.low, 'fbca04');
-  if (res.action === 'minimize') actions.minimize = await minimize(ev.id);
-  if (res.action === 'delete') actions.delete = await del(ev.id);
+  let effectiveAction = 'none';
+  if (res.action === 'label') { actions.label = await addLabel(ev.id, cfg.actions.labels.low, 'fbca04'); effectiveAction = 'label'; }
+  if (res.action === 'minimize') { actions.minimize = await minimize(ev.id); effectiveAction = 'minimize'; }
+  if (res.action === 'delete') {
+    if (isDiscussion) {
+      log('[note] 目标是讨论正文 → 降级为 minimize（不删整个讨论及其下的评论）');
+      actions.minimize = await minimize(ev.id);
+      effectiveAction = 'minimize';
+    } else {
+      actions.delete = await del(ev.id);
+      effectiveAction = 'delete';
+    }
+  }
 
   // 留痕
-  const summary = summaryLine(ev, res, actions.delete || actions.minimize || actions.label);
+  const summary = summaryLine(ev, res, actions.delete || actions.minimize || actions.label, effectiveAction);
   try {
     const sf = env('GITHUB_STEP_SUMMARY');
     if (sf) fs.appendFileSync(sf, `\n### comment-guard\n${summary}\n`);
   } catch (e) {}
-  if (res.action === 'delete') {
+  // high 档（不论最终是删还是降级成隐藏）都要留一条可追溯的记录
+  if (res.tier === 'high') {
     const rec = await recordToIssue(summary);
     log(`[trace] 汇总到 Issue：${JSON.stringify(rec).slice(0, 200)}`);
   }
 
   // 给工作流用的结论（非 0 退出会让人误以为失败，所以永远 0；是否拦截看 action 字段）
-  const out = { skipped: res.skipped, tier: res.tier, action: res.action, score: res.score, dryRun: !!DRY_RUN };
+  const out = { skipped: res.skipped, tier: res.tier, verdict: res.action, action: effectiveAction, score: res.score, dryRun: !!DRY_RUN };
   log('[done] ' + JSON.stringify(out));
   return out;
 }
