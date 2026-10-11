@@ -17,6 +17,14 @@ enableEmoji = true
 paginate = 10
 summaryLength = 80
 
+# 合集（series）：Hugo 内置没有这个分类，用 taxonomy 实现。
+# 不动 outputs / markup / params，只加这一段。
+[taxonomies]
+  tag = "tags"
+  category = "categories"
+  series = "series"
+
+
 [outputs]
   home = ["HTML", "RSS", "JSON"]
 
@@ -109,6 +117,10 @@ summaryLength = 80
   name = "标签"
   url = "/tags/"
   weight = 30
+[[menu.main]]
+  name = "合集"
+  url = "/series/"
+  weight = 35
 [[menu.main]]
   name = "搜索"
   url = "/search/"

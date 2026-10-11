@@ -12,10 +12,20 @@
 {{- if not .Params.cover.hiddenInSingle }}
   {{- with .Params.cover.image }}{{ $cover = . | absURL }}{{ end }}
 {{- end }}
+{{- /* 合集信息：没有 series 时返回 nil，下面所有合集相关的块都会自动不渲染 */ -}}
+{{- $series := partial "series-info.html" (dict "page" .) }}
 
 <article class="post">
   <header class="post-head">
     <h1 class="post-title">{{ .Title }}</h1>
+    {{- with $series }}
+    {{- /* 「本文属于《合集名》第 n / 共 m 篇」+ 回到合集页的入口 */ -}}
+    <p class="post-series">
+      <span>本文属于合集</span>
+      <a class="series-chip" href="{{ .term.RelPermalink }}">《{{ .name }}》</a>
+      <span class="series-pos">第 {{ .n }} / 共 {{ .total }} 篇</span>
+    </p>
+    {{- end }}
     <p class="post-meta">
       <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format (site.Params.DateFormat | default "2006-01-02") }}</time>
       {{- if site.Params.ShowReadingTime }}<span class="dot">·</span><span>{{ i18n "read_time" .ReadingTime }}</span>{{ end }}
@@ -51,15 +61,35 @@
     {{ .Content }}
   </div>
 
-  {{- /* 上一篇 / 下一篇：用 Hugo 的 InSection 邻居，按日期排序所以「上一篇=更早」 */ -}}
+  {{- /*
+    上一篇 / 下一篇：
+      · 有合集时 → 用**合集内**的相邻文章（按 weight 顺序，读起来是「第 n-1 / 第 n+1 篇」）
+      · 没有合集时 → 保持原来的行为（同栏目的前后邻居，按日期）
+  */ -}}
+  {{- $prev := "" }}{{ $next := "" }}
+  {{- if $series }}
+    {{- $hit := false }}
+    {{- range $series.pages }}
+      {{- if eq .RelPermalink $.RelPermalink }}
+        {{- $hit = true }}
+      {{- else if $hit }}
+        {{- if not $next }}{{ $next = . }}{{ end }}
+      {{- else }}
+        {{- $prev = . }}
+      {{- end }}
+    {{- end }}
+  {{- else }}
+    {{- with .PrevInSection }}{{ $prev = . }}{{ end }}
+    {{- with .NextInSection }}{{ $next = . }}{{ end }}
+  {{- end }}
   <nav class="post-nav">
-    {{- with .PrevInSection }}
+    {{- with $prev }}
     <a class="post-nav-item" href="{{ .RelPermalink }}">
       <span class="post-nav-label">← {{ i18n "prev_post" }}</span>
       <span class="post-nav-title">{{ .Title }}</span>
     </a>
     {{- end }}
-    {{- with .NextInSection }}
+    {{- with $next }}
     <a class="post-nav-item is-next" href="{{ .RelPermalink }}">
       <span class="post-nav-label">{{ i18n "next_post" }} →</span>
       <span class="post-nav-title">{{ .Title }}</span>

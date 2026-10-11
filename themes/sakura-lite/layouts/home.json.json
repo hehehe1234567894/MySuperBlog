@@ -18,4 +18,22 @@
       "content" (.Plain | replaceRE `\s+` " " | truncate 1200)
   ) }}
 {{- end }}
+{{- /* 合集页也放进搜索索引：taxonomy 页不在 RegularPages 里，得单独捞一遍，
+       否则搜「合集名」搜不到那一页。字段与文章保持一致，content 用导语 + 篇名拼出来，
+       这样搜文章标题也能命中对应合集。 */ -}}
+{{- range site.Taxonomies.series }}
+  {{- $pages := .Pages }}
+  {{- $titles := slice }}
+  {{- range $pages }}{{ $titles = $titles | append .Title }}{{ end }}
+  {{- $desc := .Page.Description | default (printf "共 %d 篇" (len $pages)) }}
+  {{- $out = $out | append (dict
+      "title" (printf "合集：%s" .Page.Title)
+      "url" .Page.RelPermalink
+      "date" (.Page.Lastmod.Format "2006-01-02")
+      "tags" "合集 series"
+      "cats" ""
+      "summary" $desc
+      "content" (printf "%s %s" $desc (delimit $titles " "))
+  ) }}
+{{- end }}
 {{- $out | jsonify }}

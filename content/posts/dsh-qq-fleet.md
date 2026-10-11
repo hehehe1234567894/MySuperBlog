@@ -4,6 +4,8 @@ date: 2026-09-23
 summary: "我一个人管着好几台机器，每台上都跑着 dsh。与其挨个 SSH 过去敲，不如把它们拉进一个 QQ 群——群本身就是现成的消息总线，机器人在里面派活、回报，我人在哪都能看。"
 tags: ["DSH", "QQ 机器人", "多机协作", "自动化"]
 categories: ["折腾笔记"]
+series: ["自建服务"]
+weight: 4
 ShowToc: true
 TocOpen: false
 draft: false

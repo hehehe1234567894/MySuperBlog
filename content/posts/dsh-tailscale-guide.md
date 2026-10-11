@@ -4,6 +4,8 @@ date: 2026-09-30
 summary: "从零把 DeepSeek Harness(dsh) 的 Web 界面跑起来，用 systemd 让它常驻开机自启，再用 Tailscale 在手机、笔记本上安全访问——全程不开放任何公网端口。"
 tags: ["DSH", "Tailscale", "systemd", "远程访问", "Linux"]
 categories: ["折腾笔记"]
+series: ["自建服务"]
+weight: 1
 cover:
   image: "/images/covers/dsh.svg"
   alt: "DSH + Tailscale 远程访问封面"

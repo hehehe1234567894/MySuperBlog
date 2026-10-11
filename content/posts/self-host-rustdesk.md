@@ -4,6 +4,8 @@ date: 2026-10-02
 summary: "官方服务器慢、还常常排队，那就自己搭一套。hbbs + hbbr 两个容器，一台有公网 IP 的机器就够了。这篇是我自己那台服务器的完整记录，包括端口到底谁管什么、key 怎么取、以及我踩到的两个坑。"
 tags: ["RustDesk", "远程桌面", "自建服务", "Docker"]
 categories: ["折腾笔记"]
+series: ["自建服务"]
+weight: 3
 ShowToc: true
 TocOpen: false
 draft: false

@@ -1,0 +1,29 @@
+{{- /*
+  合集（series）的「第 n / 共 m 篇」计算。
+  -------------------------------------------------------------------------
+  为什么单独抽成 partial：文章页（single）和合集页（term）都要用，而且必须保证
+  两边算出来的 n 和 m 一致 —— 各写一遍迟早会飘。
+
+  Hugo 的 .Pages 默认按 weight 升序、同 weight 按日期**降序**排。
+  所以合集内排序统一靠显式 weight（front matter 里都写了），不依赖日期，
+  免得出现「第 1 篇比第 3 篇新」这种读起来别扭的顺序。
+
+  参数：dict "page" <当前文章页>
+  返回：dict "name" 合集名 "n" 第几篇 "total" 共几篇 "pages" 该合集全部页 "term" 合集页
+        没有合集时返回 nil。
+*/ -}}
+{{- $page := .page }}
+{{- $out := "" }}
+{{- with $page.Params.series }}
+  {{- $name := index . 0 }}
+  {{- /* 用 taxonomy 拿合集页；拿不到也不报错（比如只是随手写了 series 却没人建 _index.md） */ -}}
+  {{- with site.GetPage (printf "/series/%s" $name) }}
+    {{- $pages := .Pages }}
+    {{- $n := 0 }}
+    {{- range $i, $p := $pages }}
+      {{- if eq $p.RelPermalink $page.RelPermalink }}{{ $n = add $i 1 }}{{ end }}
+    {{- end }}
+    {{- $out = dict "name" $name "n" $n "total" (len $pages) "pages" $pages "term" . }}
+  {{- end }}
+{{- end }}
+{{- return $out }}

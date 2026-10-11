@@ -1,0 +1,38 @@
+{{ define "main" }}
+{{- /*
+  /series/ 总览页：每个合集一张卡（名字 / 一句话导语 / 共几篇 / 最后更新）。
+  ---------------------------------------------------------------------------
+  为什么用自定义 layout 名（series-overview）而不是 _default/terms.html：
+  terms.html 是「所有 taxonomy 的列表页」共用模板，改它会把 /tags/ 和 /categories/
+  一起改样（回归风险）。而 _default/series.html 已经被 term 页（单个合集）占用，
+  且尝试过用 series.html 顶替总览也不行 —— 它会被当成 term 模板命中。
+  所以 content/series/_index.md 里写 layout: "series-overview" 显式指定，最稳。
+*/ -}}
+<header class="page-head">
+  <h1 class="page-title">{{ .Title | default "合集" }}</h1>
+  <p class="page-desc">按主题串起来的系列文章，从头读起更顺。</p>
+</header>
+
+<div class="series-grid">
+  {{- range .Pages }}
+  {{- $pages := .Pages }}
+  {{- $last := "" }}
+  {{- range $pages }}
+    {{- if or (not $last) (gt .Lastmod $last) }}{{ $last = .Lastmod }}{{ end }}
+  {{- end }}
+  <a class="series-card" href="{{ .RelPermalink }}">
+    <h2 class="series-name">{{ .Title }}</h2>
+    {{- with .Description }}
+    <p class="series-desc">{{ . }}</p>
+    {{- end }}
+    <p class="series-meta">
+      <span>{{ len $pages }} 篇</span>
+      {{- with $last }}
+      <span class="dot">·</span>
+      <span>最后更新 {{ .Format "2006-01-02" }}</span>
+      {{- end }}
+    </p>
+  </a>
+  {{- end }}
+</div>
+{{ end }}

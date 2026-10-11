@@ -1,0 +1,44 @@
+{{ define "main" }}
+{{- /*
+  单个合集页（term）：顶部导语 + 按合集内顺序列出的文章。
+  ---------------------------------------------------------------------------
+  顺序由 front matter 的 weight 决定（.Pages 默认就是 weight 升序、同 weight 日期降序）。
+  站上这几篇的日期和阅读顺序并不一致（QQ 那篇是补写成 09-23 的），所以都显式写了 weight，
+  不靠日期排 —— 否则会出现「第 1 篇比第 3 篇新」这种别扭顺序。
+  序号逐篇标出来，读起来才像「从第 1 篇到第 n 篇」。
+*/ -}}
+{{- $pages := .Pages }}
+
+<header class="page-head">
+  <h1 class="page-title">{{ .Title }}</h1>
+  {{- with .Description }}
+  <p class="page-desc">{{ . }}</p>
+  {{- end }}
+  <p class="page-desc series-count">共 {{ len $pages }} 篇</p>
+</header>
+
+{{- if $pages }}
+<ol class="series-list">
+  {{- range $i, $p := $pages }}
+  <li class="series-item">
+    <span class="series-num">{{ add $i 1 }}</span>
+    <a class="series-item-body" href="{{ $p.RelPermalink }}">
+      <span class="series-item-title">{{ $p.Title }}</span>
+      <span class="series-item-meta">
+        <time datetime="{{ $p.Date.Format "2006-01-02" }}">{{ $p.Date.Format "2006-01-02" }}</time>
+        {{- if site.Params.ShowReadingTime }}
+        <span class="dot">·</span>
+        <span>{{ i18n "read_time" $p.ReadingTime }}</span>
+        {{- end }}
+      </span>
+      {{- with $p.Summary }}
+      <span class="series-item-sum">{{ . | plainify | truncate 96 }}</span>
+      {{- end }}
+    </a>
+  </li>
+  {{- end }}
+</ol>
+{{- else }}
+<p class="empty">{{ i18n "no_posts" }}</p>
+{{- end }}
+{{ end }}

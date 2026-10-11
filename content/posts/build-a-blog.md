@@ -4,6 +4,8 @@ date: 2026-09-27
 summary: "不买服务器、不花一分钱：Hugo 生成静态页面，GitHub Pages 托管，推上去就自动上线。附我踩过的几个坑。"
 tags: ["建站", "Hugo", "GitHub Pages"]
 categories: ["折腾记录"]
+series: ["博客从零到一"]
+weight: 1
 ShowToc: true
 draft: false
 cover:

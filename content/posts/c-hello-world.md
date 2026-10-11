@@ -4,6 +4,8 @@ date: 2026-09-20
 summary: "第一次学 C 语言卡住的往往不是语法，而是环境。这篇把 Windows 上装编译器（w64devkit）、配 VS Code、写出并跑通第一个程序的过程一次讲清楚。"
 tags: ["C语言", "环境配置", "VS Code"]
 categories: ["C 语言"]
+series: ["C 语言与工具链"]
+weight: 1
 ShowToc: true
 TocOpen: false
 draft: false

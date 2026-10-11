@@ -4,6 +4,8 @@ date: 2026-10-02
 summary: "家里那台没公网 IP 的机器，怎么让外面的笔记本和手机直接访问它？Tailscale 把它变成一个虚拟局域网。这篇是我们本机的实测记录，包括没有 root 权限时用用户态模式跑的全部坑。"
 tags: ["Tailscale", "组网", "WireGuard", "远程访问", "Linux"]
 categories: ["折腾笔记"]
+series: ["自建服务"]
+weight: 2
 ShowToc: true
 TocOpen: false
 draft: false
