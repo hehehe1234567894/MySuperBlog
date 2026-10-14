@@ -4,8 +4,6 @@ date: 2026-09-21
 summary: "先讲原理，再给命令手册，最后附常见报错对照表。搞懂「三个区域 + 四个对象 + 引用」之后，Git 命令就不用背了。"
 tags: ["Git", "版本控制", "教程"]
 categories: ["工具"]
-series: ["C 语言与工具链"]
-weight: 2
 ShowToc: true
 TocOpen: false
 draft: false
