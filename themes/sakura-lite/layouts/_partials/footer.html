@@ -21,15 +21,6 @@
     {{- end }}
   </p>
 
-  {{- /* ICP 备案号：工信部要求必须显示在网站底部，并链接到 beian.miit.gov.cn。
-         用 .foot-line 而不是 .foot-dim —— .foot-dim 的 --text-faint 在浅色底上
-         对比度只有 ~2.4:1，备案号太淡了看不清；.foot-line 下链接走 .foot a 的
-         --text-dim（浅色 ~4.4:1 / 深色 ~7:1），且不引入任何新颜色。
-         rel="noopener" 与 target="_blank" 配套，防 reverse tabnabbing。 */ -}}
-  <p class="foot-line">
-    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">闽ICP备2026039052号-1</a>
-  </p>
-
   {{- /* 窄屏（<=1040px）看板娘不浮动，改由这里随文档流排在页脚下方。
          这是踩过的坑：浮动时会压住 giscus 的发送按钮。 */ -}}
   {{- with resources.Get "img/kanban-girl.png" }}
