@@ -1,0 +1,54 @@
+# 评论自动审核（comment-guard）
+# ===========================================================================
+# 为什么审核在 GitHub 侧：本站评论是 giscus（GitHub Discussions），渲染在 giscus.app 的
+# iframe 里。跨域 iframe 前端注入/过滤做不到 —— 但评论数据本来就存在本仓库的 Discussions 里，
+# 所以在服务端用 Actions 审核是唯一正确、且不依赖任何前端改动的落点。
+#
+# 触发：discussion（新讨论）与 discussion_comment（新评论）
+# 权限：discussions: write（隐藏/删除评论）、issues: write（打标 + 汇总记录）、contents: read
+#
+# ⚠️ 默认 **DRY_RUN=1**：只记录不动作。想真正执行，把仓库变量
+#    COMMENT_GUARD_DRY_RUN 设成 0（Settings → Secrets and variables → Actions → Variables）。
+name: comment-guard
+
+on:
+  discussion:
+    types: [created, edited]
+  discussion_comment:
+    types: [created, edited]
+
+# 同一时间只跑一个，避免并发时对同一条评论重复动作
+concurrency:
+  group: comment-guard
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  discussions: write
+  issues: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout（只需要规则文件，可以浅克隆）
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/comment-guard
+          sparse-checkout-cone-mode: true
+
+      - name: 跑规则引擎
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 默认 1（只看不动）。想开启真实动作 → 仓库变量 COMMENT_GUARD_DRY_RUN=0
+          COMMENT_GUARD_DRY_RUN: ${{ vars.COMMENT_GUARD_DRY_RUN || '1' }}
+          EVENT_NAME: ${{ github.event_name }}
+          # 事件载荷通过 **环境变量** 传给脚本，绝不拼进 shell 命令：
+          # 评论正文是不可信输入，里面一个单引号就能把 `echo '...'` 的引号配对打破（
+          # 轻则 job 报错，重则是命令注入）。放进 env 不经过 shell 解析，安全。
+          EVENT_JSON: ${{ toJSON(github.event) }}
+        run: |
+          set -euo pipefail
+          node --version
+          printf '%s' "$EVENT_JSON" > /tmp/event.json
+          node .github/comment-guard/runner.js --event /tmp/event.json --event-name "$EVENT_NAME"
