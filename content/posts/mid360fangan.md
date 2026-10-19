@@ -10,7 +10,7 @@ ShowToc: true
 TocOpen: false
 draft: false
 cover:
-  image: "/images/covers/qqfleet.svg"
+  image: ""
   alt: "Robomaster 激光雷达可行性"
   relative: false
   hiddenInSingle: true
