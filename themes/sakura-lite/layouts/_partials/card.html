@@ -13,7 +13,11 @@
 {{- $img := "" }}
 {{- if not $hidden }}
   {{- with $p.Params.cover.image }}
-    {{- $img = . | absURL }}
+    {{- $imgdl := . | absURL }}
+    {{- $pageBundleCover := ($p.Resources.ByType "image").GetMatch (printf "*%s*" .) }}
+    {{- $globalResourcesCover := (resources.ByType "image").GetMatch (printf "*%s*" .) }}
+    {{- with or $pageBundleCover $globalResourcesCover }}{{ $imgdl = .RelPermalink }}{{ end }}
+    {{- $img = $imgdl }}
   {{- else }}
     {{- /* 没有封面就现生成一张：主题色渐变色块 + 右侧柔光，避免卡片左图位留白破图。
            SVG 体积极小，不需要走图片处理管线。 */ -}}
