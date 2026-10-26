@@ -10,7 +10,13 @@
 {{- $tocOpen := or .Params.TocOpen site.Params.TocOpen }}
 {{- $cover := "" }}
 {{- if not .Params.cover.hiddenInSingle }}
-  {{- with .Params.cover.image }}{{ $cover = . | absURL }}{{ end }}
+  {{- with .Params.cover.image }}
+    {{- $coverdl := . | absURL }}
+    {{- $pageBundleCover := ($.Resources.ByType "image").GetMatch (printf "*%s*" .) }}
+    {{- $globalResourcesCover := (resources.ByType "image").GetMatch (printf "*%s*" .) }}
+    {{- with or $pageBundleCover $globalResourcesCover }}{{ $coverdl = .RelPermalink }}{{ end }}
+    {{- $cover = $coverdl }}
+  {{- end }}
 {{- end }}
 {{- /* 合集信息：没有 series 时返回 nil，下面所有合集相关的块都会自动不渲染 */ -}}
 {{- $series := partial "series-info.html" (dict "page" .) }}
