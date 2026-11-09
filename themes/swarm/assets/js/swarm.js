@@ -217,17 +217,11 @@
     }
     /* 元素被滚出视口 → 放弃这条任务，退回队列，避免在屏幕外偷偷画 */
     abandonTask(e) {
+      /* 元素被滚过去了：直接算建完，不退回队列 —— 否则永远轮不到它，计数归不了零 */
       const t = this.task,
         n = t.b;
-      t.type === "outline" ? n.outline = 0 : t.type === "type" ? n.typed = 0 : n.filled = 0,
-        n.claimed = !1,
-        e.taskQueue.push({
-          type: t.type,
-          b: n,
-          i: 0,
-          k: t.type === "outline" ? 0 : 1
-        }),
-        e.waitCount++,
+      n.outline = 1, n.typed = 1, n.filled = 1, n.done = !0, n.reveal = 1,
+        n.done && e.built++, m.textContent = e.built,
         e.activeBuilders = Math.max(0, e.activeBuilders - 1),
         this.task = null, this.press = 0, this.shape = "arrow"
     }
@@ -462,10 +456,8 @@
   };
   z?.addEventListener("click", () => t.skip());
   const D = () => {
-    if (t.userScrolled) return;
-    t.userScrolled = !0, setTimeout(() => {
-      (t.phase === "build" || t.phase === "intro") && t.toHandoff()
-    }, 600)
+    /* 只接管滚动控制权（停掉自动下滑），不强制收工 —— 否则一滚就结束，看不到建造 */
+    t.userScrolled = !0
   };
   ["wheel", "touchmove", "keydown"].forEach(e => addEventListener(e, D, {
     passive: !0
@@ -501,7 +493,7 @@
           const e = window.scrollY || 0,
             s = Math.max(i * .01667, .001),
             o = Math.abs(e - t.lastSy) / s;
-          t.vel = Math.max(t.vel * Math.exp(-s * 1.2), t.vel * .7 + o * .3), t.lastSy = e, t.phase !== "intro" && (t.frontier = Math.max(t.frontier, e + n + 250)), t.tempo = c(2.1 + t.vel / 900 + t.taskQueue.length / Math.max(1, t.agents.length) * .5, 2.1, 4.5)
+          t.vel = Math.max(t.vel * Math.exp(-s * 1.2), t.vel * .7 + o * .3), t.lastSy = e, t.phase !== "intro" && (t.frontier = Math.max(t.frontier, e + n + 250)), t.tempo = c(2.1 + t.vel / 900 + t.taskQueue.length / Math.max(1, t.agents.length) * .5, 2.1, 4.5) * (t.userScrolled ? 1.6 : 1)
         }
         if (t.phase === "build" && !t.rushing && !t.userScrolled) {
           const s = document.documentElement.scrollHeight - n,
@@ -516,13 +508,16 @@
         }
         if (t.phase === "build" && !t.rushing && !t.finishing)
           if (t.waitCount <= 0 && t.activeBuilders === 0) t.finishing = !0, setTimeout(() => t.toHandoff(), 300);
+          else if ((window.scrollY || 0) + window.innerHeight >= document.documentElement.scrollHeight - 12 && t.activeBuilders === 0) {
+            t.finishing = !0; setTimeout(() => t.toHandoff(), 400);
+          }
           else if (t.userScrolled) {
           const e = window.scrollY || 0,
             s = t.taskQueue.filter(t => {
               const s = t.b.y - e;
               return s + t.b.h > -30 && s < n + 30
             }).length;
-          s === 0 && t.activeBuilders === 0 ? (t.idleTime += i, t.idleTime > 72 && (t.finishing = !0, t.toHandoff())) : t.idleTime = 0
+          s === 0 && t.activeBuilders === 0 ? (t.idleTime += i, t.idleTime > 240 && (t.finishing = !0, t.toHandoff())) : t.idleTime = 0
         }
       }
     } else {
