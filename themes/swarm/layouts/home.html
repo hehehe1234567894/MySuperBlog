@@ -1,0 +1,48 @@
+{{ define "main" }}
+{{/* ── 首屏 hero：这些元素会先被 canvas 上的群集光标"建造"出来 ── */}}
+<section class="hero" id="hero">
+  <div class="hero-inner">
+    <p class="hero-eyebrow" data-build="text">群集光标 · 建造中</p>
+    <h1 class="hero-title" data-build="title">{{ site.Title }}</h1>
+    <p class="hero-desc" data-build="text">{{ site.Params.description | default "记录踩过的坑和想通的事。" }}</p>
+    <div class="hero-actions">
+      {{ with site.GetPage "/posts" }}
+        <a class="btn btn-primary" data-build="box" href="{{ .RelPermalink }}">全部文章</a>
+      {{ end }}
+      {{ with site.GetPage "/series" }}
+        <a class="btn btn-ghost" data-build="box" href="{{ .RelPermalink }}">合集</a>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+{{/* ── 文章列表 ── */}}
+<section class="posts-section">
+  <div class="section-head">
+    <h2 class="section-title">最近更新</h2>
+    {{ with site.GetPage "/posts" }}<a class="section-more" href="{{ .RelPermalink }}">全部 →</a>{{ end }}
+  </div>
+
+  {{ $posts := where site.RegularPages "Section" "posts" }}
+  {{ $posts = $posts.ByDate.Reverse }}
+  {{ if $posts }}
+  <div class="post-grid">
+    {{ range first 12 $posts }}
+      <article class="post-card" data-build="card">
+        <a class="post-card-link" href="{{ .RelPermalink }}">
+          <div class="post-card-meta">
+            <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "01-02" }}</time>
+            {{ with index .Params.tags 0 }}<span class="tag">{{ . }}</span>{{ end }}
+          </div>
+          <h3 class="post-card-title">{{ .Title }}</h3>
+          {{ with .Summary }}<p class="post-card-summary">{{ . | plainify | truncate 90 }}</p>{{ end }}
+          <span class="post-card-arrow" aria-hidden="true">→</span>
+        </a>
+      </article>
+    {{ end }}
+  </div>
+  {{ else }}
+    <p class="empty-hint">还没有文章。</p>
+  {{ end }}
+</section>
+{{ end }}

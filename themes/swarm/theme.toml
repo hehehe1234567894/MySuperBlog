@@ -1,0 +1,14 @@
+# swarm —— 群集光标主题
+# 首屏由一群光标把页面"建"出来，之后沉为背景层。
+name = "swarm"
+license = "MIT"
+description = "群集光标主题：首屏由多光标拉框、打字、贴卡片把页面建出来，随后沉为低透明度背景。"
+homepage = "https://blog.funnycode.site/"
+min_version = "0.146.0"
+
+[author]
+  name = "MIEW"
+  homepage = "https://blog.funnycode.site/"
+
+[params]
+  description = "深色、群集光标、建造感"

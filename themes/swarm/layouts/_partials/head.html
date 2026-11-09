@@ -1,0 +1,15 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} · {{ site.Title }}{{ end }}</title>
+{{ with site.Params.description }}<meta name="description" content="{{ . }}">{{ end }}
+{{ if not .IsHome }}{{ with .Summary }}<meta name="description" content="{{ . | plainify | truncate 160 }}">{{ end }}{{ end }}
+
+{{ $css := resources.Get "css/swarm.css" }}
+{{ if $css }}
+  {{ $css = $css | minify | fingerprint }}
+  <link rel="stylesheet" href="{{ $css.RelPermalink }}" integrity="{{ $css.Data.Integrity }}">
+{{ end }}
+
+<link rel="icon" href="/favicon.ico">
+{{ with .OutputFormats.Get "rss" }}<link rel="alternate" type="application/rss+xml" href="{{ .Permalink }}" title="{{ site.Title }}">{{ end }}
+{{ template "_internal/opengraph.html" . }}

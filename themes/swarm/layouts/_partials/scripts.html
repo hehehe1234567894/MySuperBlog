@@ -1,0 +1,5 @@
+{{ $js := resources.Get "js/swarm.js" }}
+{{ if $js }}
+  {{ $js = $js | minify | fingerprint }}
+  <script src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}" defer></script>
+{{ end }}

@@ -1,0 +1,18 @@
+{{ define "main" }}
+<div class="list-page">
+  <h1 class="list-title">{{ .Title }}</h1>
+  {{ with .Content }}<div class="list-desc">{{ . }}</div>{{ end }}
+
+  <div class="list-items">
+    {{ range .Pages.ByDate.Reverse }}
+      <a class="list-item" href="{{ .RelPermalink }}">
+        <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "01-02" }}</time>
+        <span class="t">{{ .Title }}</span>
+      </a>
+    {{ end }}
+  </div>
+
+  {{ if eq (len .Pages) 0 }}<p class="empty-hint">还没有内容。</p>{{ end }}
+  {{ template "_internal/pagination.html" . }}
+</div>
+{{ end }}
