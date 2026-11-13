@@ -1,11 +1,11 @@
 {{ define "main" }}
 <div class="list-page">
-  <h1 class="list-title">{{ .Title }}</h1>
-  {{ with .Content }}<div class="list-desc">{{ . }}</div>{{ end }}
+  <h1 class="list-title" data-build="title">{{ .Title }}</h1>
+  {{ with .Content }}<div class="list-desc" data-build="text">{{ . }}</div>{{ end }}
 
   <div class="list-items">
     {{ range .Pages.ByDate.Reverse }}
-      <a class="list-item" href="{{ .RelPermalink }}">
+      <a class="list-item" data-build="card" href="{{ .RelPermalink }}">
         <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "01-02" }}</time>
         <span class="t">{{ .Title }}</span>
       </a>

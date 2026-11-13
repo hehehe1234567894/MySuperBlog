@@ -1,9 +1,9 @@
 {{ define "main" }}
 <div class="list-page">
-  <h1 class="list-title">{{ .Title }}</h1>
+  <h1 class="list-title" data-build="title">{{ .Title }}</h1>
   <div class="list-items">
     {{ range .Data.Terms.Alphabetical }}
-      <a class="list-item" href="{{ .Page.RelPermalink }}">
+      <a class="list-item" data-build="card" href="{{ .Page.RelPermalink }}">
         <time>{{ .Count }} 篇</time>
         <span class="t">{{ .Page.Title }}</span>
       </a>

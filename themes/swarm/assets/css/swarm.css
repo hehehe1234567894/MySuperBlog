@@ -52,15 +52,22 @@ img{max-width:100%;height:auto;display:block}
   height:100%;
 }
 
-/* 收尾：光标聚拢后整体淡出，然后 canvas 被移除（不再乱飘） */
-.swarm-stage.is-fading{
+/* 收尾：只淡出画布，HUD 保留「重播」，方便反复预览 */
+.swarm-stage.is-fading canvas{
   opacity:0;
   transition:opacity .6s ease;
 }
-.swarm-stage.is-fading .swarm-hud{opacity:0;pointer-events:none}
+/* 收尾后 HUD 只留重播按钮 */
+.swarm-stage.is-fading .swarm-hud .hud-dot,
+.swarm-stage.is-fading .swarm-hud .hud-text,
+.swarm-stage.is-fading .swarm-hud .hud-skip{display:none}
+
+/* hidden 必须显式生效：上面的 display:flex 会盖掉浏览器默认的 [hidden]{display:none} */
+.swarm-hud[hidden]{display:none!important}
 
 /* HUD */
 .swarm-hud{
+  pointer-events:auto;
   position:absolute;
   left:22px;
   bottom:20px;
@@ -103,14 +110,41 @@ img{max-width:100%;height:auto;display:block}
   transition:all .18s ease;
 }
 .hud-skip:hover{border-color:var(--accent);color:var(--accent)}
-
-/* 建造中：真实内容隐身 */
-body.swarm-running .page-wrap{opacity:0}
-/* 建造期间仍可滚动 —— 效果是"滚到哪建到哪" */
-body.swarm-done .page-wrap{
-  opacity:1;
-  transition:opacity .8s ease .1s;
+.hud-replay{
+  background:transparent;
+  border:1px solid var(--line-strong);
+  color:var(--text-dim);
+  font-size:11px;
+  padding:3px 10px;
+  border-radius:999px;
+  cursor:pointer;
+  transition:all .18s ease;
 }
+.hud-replay:hover{border-color:var(--accent);color:var(--accent)}
+.hud-hint{display:none;color:var(--accent);font-size:11px;opacity:.9}
+
+/* 打字机光标：只在文字元素建造中显示，跟着已打出的文字闪烁 */
+.swarm-caret{
+  display:none;
+  width:2px;
+  height:1em;
+  margin-left:3px;
+  vertical-align:-.14em;
+  background:var(--accent);
+  box-shadow:0 0 8px var(--accent);
+  animation:swarm-caret-blink .7s steps(1,end) infinite;
+}
+@keyframes swarm-caret-blink{50%{opacity:0}}
+
+/* 建造中：页面整体保持可见，只有带 data-build 的元素由 JS 按进度逐个揭示 */
+body.swarm-running [data-build]{
+  opacity:0;
+  clip-path:inset(0 100% 0 0);
+  will-change:opacity,clip-path,transform;
+}
+[data-build].is-built{will-change:auto}
+/* 兜底：JS 未启动或异常时页面照常可读 */
+body.swarm-done .page-wrap{opacity:1}
 
 /* ─── 布局 ─────────────────────────────────────── */
 
@@ -435,8 +469,6 @@ body.swarm-done .page-wrap{
 
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
-  .swarm-stage{display:none}
-  body.swarm-running .page-wrap{opacity:1}
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
 
