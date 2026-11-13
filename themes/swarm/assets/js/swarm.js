@@ -446,9 +446,27 @@
         const tx = this.task.x - 8;
         const ty = this.task.y - scrollTop() - 8;
         const k = 1 - Math.exp(-dt * 14);
-        this.x += (tx - this.x) * k;
-        this.y += (ty - this.y) * k;
+        let nx = this.x + (tx - this.x) * k;
+        let ny = this.y + (ty - this.y) * k;
+        /* 限速 1500px/s：目标在屏幕另一端时，强缓动第一帧就会跳半屏
+           （实测最大 496px/帧），看起来像瞬移。限速后是看得见的飞行轨迹。 */
+        const maxStep = 1500 * dt;
+        const dx = nx - this.x, dy = ny - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxStep) {
+          nx = this.x + (dx / dist) * maxStep;
+          ny = this.y + (dy / dist) * maxStep;
+        }
+        this.x = nx;
+        this.y = ny;
         if (this.travelT >= 1) {
+          /* 只在小距离内吸附；还差得远就继续飞 —— 否则快进/低帧率下会瞬移半屏 */
+          if (Math.hypot(tx - this.x, ty - this.y) > 48) {
+            this.pushTrail();
+            return;
+          }
+          this.x = tx;
+          this.y = ty;
           /* 先「点击」：按下 + 涟漪；此阶段文字保持空白，还没有打字 */
           this.state = 'click';
           this.clickT = 0;

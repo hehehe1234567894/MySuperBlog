@@ -476,10 +476,65 @@ body.swarm-done .page-wrap{opacity:1}
 ::selection{background:rgba(13,153,255,.28);color:#fff}
 
 /* 滚动条 */
+*{scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.24) transparent}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{
   background:rgba(148,163,184,.22);
   border-radius:5px;
+  border:2px solid var(--bg);
 }
-::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.36)}
+::-webkit-scrollbar-thumb:hover{background:rgba(13,153,255,.55)}
+
+/* ─── 分页（Hugo 内置模板输出 Bootstrap 类名，主题需自备样式）─── */
+.pagination{
+  list-style:none;display:flex;align-items:center;justify-content:center;
+  gap:6px;margin:46px 0 0;padding:0;flex-wrap:wrap;
+}
+.pagination .page-item{display:inline-flex}
+.pagination .page-link{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:34px;height:34px;padding:0 11px;
+  border:1px solid var(--line);border-radius:9px;
+  font-size:13px;font-family:var(--font-mono);
+  color:var(--text-dim);background:rgba(148,163,184,.03);
+  transition:all .18s ease;
+}
+.pagination .page-link:hover{
+  border-color:var(--accent);color:var(--accent);
+  background:rgba(13,153,255,.08);
+  box-shadow:0 0 16px rgba(13,153,255,.16);
+}
+.pagination .page-item.active .page-link{
+  border-color:var(--accent);color:#fff;
+  background:linear-gradient(180deg,rgba(13,153,255,.30),rgba(13,153,255,.14));
+  box-shadow:0 0 18px rgba(13,153,255,.26);
+}
+.pagination .page-item.disabled .page-link{
+  opacity:.3;pointer-events:none;background:transparent;box-shadow:none;
+}
+
+/* ─── 列表条目：hover 左侧高亮条 ───────────────── */
+.list-item{position:relative}
+.list-item::before{
+  content:'';position:absolute;left:-16px;top:50%;
+  width:2px;height:0;border-radius:2px;
+  background:linear-gradient(180deg,var(--accent),rgba(13,153,255,.15));
+  transform:translateY(-50%);
+  transition:height .22s ease;
+}
+.list-item:hover::before{height:58%}
+
+/* ─── 正文 h2 底部强调线 / 代码块顶部微光 ───────── */
+.article-body h2{position:relative}
+.article-body h2::before{
+  content:'';position:absolute;left:0;bottom:-1px;width:46px;height:1px;
+  background:var(--accent);
+  box-shadow:0 0 10px rgba(13,153,255,.7);
+}
+.article-body pre{position:relative}
+.article-body pre::after{
+  content:'';position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,rgba(13,153,255,.5),transparent 55%);
+  border-radius:10px 10px 0 0;pointer-events:none;
+}
