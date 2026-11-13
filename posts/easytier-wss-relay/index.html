@@ -1,0 +1,355 @@
+<!doctype html><html lang=zh-cn data-theme-init><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name=theme-color content="#ffffff" media="(prefers-color-scheme: light)"><meta name=theme-color content="#1c1f26" media="(prefers-color-scheme: dark)"><title>校园网封了 Tailscale，我用 EasyTier 走 WSS/443 从宿舍连回家 · MIEW</title><meta name=description content="学校校园网按 TLS 握手里的域名做过滤，tailscale.com 直接被掐，家里的机器又没有公网 IP。最后的办法是：自己那台云服务器当 EasyTier 中继，把隧道塞进 443 端口上的一个普通 HTTPS 路径里，域名还是我自己的。这篇是完整部署记录——中继和节点怎么装、Caddy 的 /et/ 路由怎么和 …"><link rel=canonical href=https://blog.funnycode.site/posts/easytier-wss-relay/><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=apple-touch-icon href=/apple-touch-icon.png><link rel=alternate type=application/rss+xml href=https://blog.funnycode.site/index.xml title=MIEW><meta property="og:type" content="article"><meta property="og:title" content="校园网封了 Tailscale，我用 EasyTier 走 WSS/443 从宿舍连回家 · MIEW"><meta property="og:description" content="学校校园网按 TLS 握手里的域名做过滤，tailscale.com 直接被掐，家里的机器又没有公网 IP。最后的办法是：自己那台云服务器当 EasyTier 中继，把隧道塞进 443 端口上的一个普通 HTTPS 路径里，域名还是我自己的。这篇是完整部署记录——中继和节点怎么装、Caddy 的 /et/ 路由怎么和 …"><meta property="og:url" content="https://blog.funnycode.site/posts/easytier-wss-relay/"><meta property="og:site_name" content="MIEW"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://blog.funnycode.site/og.png"><meta property="article:published_time" content="2026-11-13T00:00:00+08:00"><meta property="article:modified_time" content="2026-11-13T00:00:00+08:00"><meta property="article:tag" content="EasyTier"><meta property="article:tag" content="网络"><meta property="article:tag" content="组网"><meta property="article:tag" content="WSS"><meta property="article:tag" content="Caddy"><meta property="article:tag" content="校园网"><meta name=twitter:card content="summary_large_image"><meta name=twitter:title content="校园网封了 Tailscale，我用 EasyTier 走 WSS/443 从宿舍连回家 · MIEW"><meta name=twitter:description content="学校校园网按 TLS 握手里的域名做过滤，tailscale.com 直接被掐，家里的机器又没有公网 IP。最后的办法是：自己那台云服务器当 EasyTier 中继，把隧道塞进 443 端口上的一个普通 HTTPS 路径里，域名还是我自己的。这篇是完整部署记录——中继和节点怎么装、Caddy 的 /et/ 路由怎么和 …"><meta name=twitter:image content="https://blog.funnycode.site/og.png"><script type=application/ld+json>"{\"@context\":\"https://schema.org\",\"@type\":\"BlogPosting\",\"author\":{\"@type\":\"Person\",\"name\":\"MIEW\"},\"dateModified\":\"2026-11-13\",\"datePublished\":\"2026-11-13\",\"headline\":\"校园网封了 Tailscale，我用 EasyTier 走 WSS/443 从宿舍连回家\",\"mainEntityOfPage\":{\"@id\":\"https://blog.funnycode.site/posts/easytier-wss-relay/\",\"@type\":\"WebPage\"}}"</script><script>window.__SAKURA={posts:13,tags:40,searchIndex:"/index.json"}</script><style>@font-face{font-family:ubuntu;font-style:normal;font-weight:400;font-display:swap;unicode-range:U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;src:url(/fonts/ubuntu-400-latin.woff2)format('woff2')}@font-face{font-family:ubuntu;font-style:normal;font-weight:400;font-display:swap;unicode-range:U+100-2BA,U+2BD-2C5,U+2C7-2CC,U+2CE-2D7,U+2DD-2FF,U+304,U+308,U+329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;src:url(/fonts/ubuntu-400-latin-ext.woff2)format('woff2')}@font-face{font-family:ubuntu;font-style:normal;font-weight:700;font-display:swap;unicode-range:U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;src:url(/fonts/ubuntu-700-latin.woff2)format('woff2')}@font-face{font-family:source code pro;font-style:normal;font-weight:400 700;font-display:swap;unicode-range:U+??,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;src:url(/fonts/sourcecodepro-400-latin.woff2)format('woff2')}</style><link rel=stylesheet href=/css/sakura.min.070012e2b41d1ecf562ed57023edee7c989876fd4caf3cccc801fa161fd91149.css integrity="sha256-BwAS4rQdHs9WLtVwI+3ufJiYdv1MrzzMyAH6Fh/ZEUk="><link rel=stylesheet href=/css/chroma.min.95672f97891fa62dd2b281fc246d2fd4ca8ca07bc3cca9e9e0aca3f1fcd2f625.css integrity="sha256-lWcvl4kfpi3SsoH8JG0v1MqMoHvDzKnp4Kyj8fzS9iU="><script>(function(){var t,e=null;try{e=localStorage.getItem("theme")}catch{}t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light",document.documentElement.setAttribute("data-theme",e||t),document.documentElement.removeAttribute("data-theme-init")})()</script></head><body class=is-page><header class=nav id=nav><div class=nav-inner><a class=brand href=/>MIEW</a><nav class=nav-links id=nav-links aria-label=主页><a href=/posts/ class=is-active aria-current=page>文章</a>
+<a href=/archives/>归档</a>
+<a href=/tags/>标签</a>
+<a href=/series/>合集</a>
+<a href=/search/>搜索</a>
+<a href=/about/>关于</a></nav><div class=nav-tools><button class="nav-icon nav-burger" type=button id=nav-burger aria-label=文章 aria-expanded=false aria-controls=nav-links>
+<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></g></svg>
+</button>
+<a class=nav-icon href=/ title=主页 aria-label=主页><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M12 3.2 3 10.6V21h6.4v-6h5.2v6H21V10.6z"/></svg>
+</a><a class=nav-icon href=/search/ title=搜索 aria-label=搜索><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M10.5 4a6.5 6.5.0 110 13 6.5 6.5.0 010-13zm5 11.5L20 20"/></svg>
+</a><button class="nav-icon theme-btn" type=button id=theme-toggle aria-label=切换主题 title=切换主题>
+<svg class="i-sun" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.4V5m0 14v2.6M2.4 12H5m14 0h2.6M5.2 5.2 7 7M17 17l1.8 1.8m0-13.6L17 7M7 17l-1.8 1.8"/></g></svg>
+<svg class="i-moon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path fill="currentColor" d="M20 14.5A8.5 8.5.0 019.5 4 8.5 8.5.0 1020 14.5z"/></svg></button></div></div></header><main class=wrap><article class=post><header class=post-head><h1 class=post-title>校园网封了 Tailscale，我用 EasyTier 走 WSS/443 从宿舍连回家</h1><p class=post-series><span>本文属于合集</span>
+<a class=series-chip href=/series/%E8%87%AA%E5%BB%BA%E6%9C%8D%E5%8A%A1/>《自建服务》</a>
+<span class=series-pos>第 6 / 共 7 篇</span></p><p class=post-meta><time datetime=2026-11-13>2026-11-13</time><span class=dot>·</span><span>21 分钟</span><span class=dot>·</span><span>10084 字</span></p><p class=post-tax><a class=tag-chip href=/categories/%E6%8A%98%E8%85%BE%E7%AC%94%E8%AE%B0/>折腾笔记</a><a class=tag-chip href=/tags/easytier/>#EasyTier</a><a class=tag-chip href=/tags/%E7%BD%91%E7%BB%9C/>#网络</a><a class=tag-chip href=/tags/%E7%BB%84%E7%BD%91/>#组网</a><a class=tag-chip href=/tags/wss/>#WSS</a><a class=tag-chip href=/tags/caddy/>#Caddy</a><a class=tag-chip href=/tags/%E6%A0%A1%E5%9B%AD%E7%BD%91/>#校园网</a></p></header><details class=toc><summary>目录</summary><nav id=TableOfContents><ul><li><a href=#一先搞清楚校园网到底封了什么>一、先搞清楚校园网到底封了什么</a></li><li><a href=#二为什么是-wss-over-443>二、为什么是 WSS over 443</a></li><li><a href=#三整体形状>三、整体形状</a></li><li><a href=#四sni-和-caddy-的-et-到底怎么配合>四、SNI 和 Caddy 的 <code>/et/</code> 到底怎么配合</a><ul><li><a href=#这里有个特别容易误判的地方>这里有个特别容易误判的地方</a></li></ul></li><li><a href=#五装中继云服务器>五、装中继（云服务器）</a><ul><li><a href=#51-拿二进制>5.1 拿二进制</a></li><li><a href=#52-密钥>5.2 密钥</a></li><li><a href=#53-启动脚本>5.3 启动脚本</a></li><li><a href=#54-systemd>5.4 systemd</a></li></ul></li><li><a href=#六装节点家里那台>六、装节点（家里那台）</a></li><li><a href=#七easytier-guard中继能借道但不能进门>七、easytier-guard：中继能借道，但不能进门</a><ul><li><a href=#问题在哪>问题在哪</a></li><li><a href=#第一层acleasytier-自己的>第一层：ACL（EasyTier 自己的）</a></li><li><a href=#第二层iptables不信-acl-也能挡>第二层：iptables（不信 ACL 也能挡）</a></li><li><a href=#让它开机自动生效>让它开机自动生效</a></li></ul></li><li><a href=#八网络名和密钥怎么管>八、网络名和密钥怎么管</a></li><li><a href=#九怎么验证别信-systemctl>九、怎么验证（别信 systemctl）</a><ul><li><a href=#第一层隧道本身>第一层：隧道本身</a></li><li><a href=#第二层三层可达>第二层：三层可达</a></li><li><a href=#第三层真实服务>第三层：真实服务</a></li><li><a href=#反向验证门卫真的挡住了>反向验证：门卫真的挡住了</a></li><li><a href=#一个会骗人的现象>一个会骗人的现象</a></li></ul></li><li><a href=#十踩过的坑一条条记>十、踩过的坑，一条条记</a><ul><li><a href=#1-400-不是错误404-才是>1. 400 不是错误，404 才是</a></li><li><a href=#2-caddy-reload-在这台机器上永远是失败>2. <code>caddy reload</code> 在这台机器上永远是失败</a></li><li><a href=#3-iptables--a-写在--j-return-后面是死规则>3. <code>iptables -A</code> 写在 <code>-j RETURN</code> 后面是死规则</a></li><li><a href=#4---proxy-networks-会把整个家庭网段送出去>4. <code>--proxy-networks</code> 会把整个家庭网段送出去</a></li><li><a href=#5-wireguard-门户这条路我放弃了>5. WireGuard 门户这条路我放弃了</a></li><li><a href=#6-卸载这件事我做错过一次>6. 卸载这件事，我做错过一次</a></li><li><a href=#7-资源占用说实话>7. 资源占用说实话</a></li></ul></li><li><a href=#十一现在的状态和它的边界>十一、现在的状态和它的边界</a></li></ul></nav></details><div class=post-body><blockquote><p>本文由默认配置（服务器管理）整理。</p></blockquote><p>我家里那台机器（跑博客、跑一堆自建服务的那台）没有公网 IP，之前一直靠 Tailscale 在外面连回去。
+九月开学之后这件事突然不成立了：<strong>宿舍的校园网连不上 Tailscale</strong>。</p><p>不是慢，是根本连不上。手机流量下一切正常，切到校园 WiFi 就废。</p><p>这篇文章记录的是最后跑通的方案：<strong>自己那台云服务器当 EasyTier 中继，隧道走 443 端口上的一个普通 HTTPS 路径</strong>。
+现在 <code>easytier-cli peer</code> 在这台家里机器上看到的是这样：</p><pre tabindex=0><code>| ipv4        | hostname   | cost | lat(ms) | loss | tunnel | NAT            | version        |
+|-------------|------------|------|---------|------|--------|----------------|----------------|
+| 10.1.1.2/24 | homeserver | Local| -       | -    | -      | PortRestricted | 2.6.4-8428a89d |
+| 10.1.1.1/24 | relay      | p2p  | 25.30   | 0.0% | wss    | PortRestricted | 2.6.4-8428a89d |
+</code></pre><p><code>tunnel</code> 那一列写着 <code>wss</code>，延迟 25 毫秒，丢包 0。这就是全部成果。</p><h2 id=一先搞清楚校园网到底封了什么>一、先搞清楚校园网到底封了什么</h2><p>一开始我以为是 UDP 被封了。Tailscale 打洞靠 UDP，UDP 不通就退到 DERP 中继，中继再不通就彻底没戏。
+按这个思路折腾了半天，全是白费力气。</p><p>真正该做的第一件事是<strong>分层测</strong>，而不是猜。四个探针，一个比一个精确：</p><table><thead><tr><th>探什么</th><th>命令</th><th>失败说明什么</th></tr></thead><tbody><tr><td>控制面域名通不通</td><td><code>curl -m 8 -o /dev/null -w '%{http_code}\n' https://controlplane.tailscale.com/health</code></td><td>DNS 或 TLS 层就不通</td></tr><tr><td>中继域名通不通</td><td><code>curl -m 8 -o /dev/null -w '%{http_code}\n' https://derp.tailscale.com/</code></td><td>备用路径也断</td></tr><tr><td>UDP 出得去吗</td><td><code>nc -zvu 1.1.1.1 41641; echo $?</code></td><td>不通 → 打洞这条路直接没了</td></tr><tr><td>是域名被拦还是 IP 被拦</td><td><code>curl -m 8 --resolve example.com:443:&lt;已知IP> https://example.com/</code></td><td>IP 能通、域名不通 → <strong>SNI 过滤</strong></td></tr></tbody></table><p>最后一条是关键。<strong>SNI 是 TLS 握手时客户端明发的那一段"我要访问哪个网站"</strong>，它在加密开始之前就发出去了，
+所以中间设备不用解密就能看见，也就能照着名单拦。</p><p>校园网拦的就是这个名单。<code>controlplane.tailscale.com</code>、<code>derp.tailscale.com</code>，看见 <code>tailscale</code> 这个词就断。
+包根本没出去，跟你用什么 NAT 穿透算法、版本多新、有没有 IPv6，一点关系都没有。</p><p><strong>这个结论直接决定了方案</strong>：换一个"更好的 VPN"是没用的，只要它的域名里还带着被拦的词，一样死。
+唯一能过的形状是 —— <strong>隧道的 SNI 必须是一个我自己拥有、不在名单上的域名</strong>。</p><h2 id=二为什么是-wss-over-443>二、为什么是 WSS over 443</h2><p>确定了病因，选药就简单了。三条要求：</p><ol><li>走 443 端口 —— 全世界的网络都不敢随便封 443，封了半个互联网都没了。</li><li>走 TLS —— 不然中间设备能看见内容，一样能拦。</li><li>域名是我自己的 —— 比如 <code>funnycode.site</code>，看着就是一个正常网站。</li></ol><p>同时满足这三条的东西叫 <strong>WSS（WebSocket over TLS）</strong>。它在网络看来跟"浏览器打开一个网页"没有任何区别：
+同一个端口、同一种握手、同一张证书。区别只在握手完成之后，里面跑的不是网页，是隧道流量。</p><p>EasyTier 恰好支持 WSS 作为节点之间的传输方式。这就是选它的全部理由 —— 不是因为它比 Tailscale 强，
+而是因为它允许我把隧道挂到<strong>自己的域名 + 自己的 443</strong> 上。</p><p>顺便说一句，这条路有个物理上限要先说清楚：<strong>所有流量都要经过那台云服务器，而它只有 3 Mbps 上行</strong>。
+跑 SSH、开个面板、传个小文件很舒服；想在上面看视频、同步相册、拖 SMB 大文件，那就是自找罪受。
+这一点我在动手前就跟自己确认过了，所以后面没为"怎么加速"浪费一分钟。</p><h2 id=三整体形状>三、整体形状</h2><pre tabindex=0><code>iPhone / 笔记本（校园网）
+        │
+        │  WSS，443 端口，SNI = funnycode.site
+        ▼
+┌───────────────────────────────────────┐
+│ 云服务器 funnycode.site                │
+│                                        │
+│  Caddy（443，正常网站也在这儿）         │
+│    └─ handle /et/* → 127.0.0.1:11011   │
+│                          │              │
+│  easytier-core（中继）◄───┘              │
+│    虚拟 IP 10.1.1.1                     │
+└───────────────────┬───────────────────┘
+                    │  加密隧道
+                    ▼
+┌───────────────────────────────────────┐
+│ 家里 homeserver                        │
+│  easytier-core（节点）                  │
+│    虚拟 IP 10.1.1.2                    │
+│    easytier-guard：只放行家庭成员        │
+└───────────────────────────────────────┘
+</code></pre><p>几个设计决定，都是被现实逼出来的：</p><ul><li><strong>中继和网站共用 443</strong>，不额外开端口。云服务器的安全组我一个都没动。</li><li><strong>EasyTier 自己的 WebSocket 监听只绑 <code>127.0.0.1:11011</code></strong>，公网碰不到它，只有 Caddy 能转发进去。</li><li><strong>家里那台不监听任何端口</strong>（<code>--no-listener</code>），它只主动往外连。</li><li><strong>云服务器是"借道"的，不是"进门"的</strong>。这条后面单独讲，是我花时间最多的地方。</li></ul><h2 id=四sni-和-caddy-的-et-到底怎么配合>四、SNI 和 Caddy 的 <code>/et/</code> 到底怎么配合</h2><p>这一段是整个方案的核心，值得拆开讲。</p><p>浏览器（或者 EasyTier）连 <code>funnycode.site:443</code> 时，顺序是这样的：</p><pre tabindex=0><code>① TCP 连到 443
+② TLS 握手，ClientHello 里带 SNI = &#34;funnycode.site&#34;   ← 中间设备在这一步检查，放行
+③ 握手完成，HTTP 请求发出去：GET /et/  Upgrade: websocket
+④ Caddy 看见路径是 /et/，把它转给 127.0.0.1:11011
+⑤ EasyTier 收到 WebSocket，隧道建立
+</code></pre><p>关键在于 <strong>② 和 ④ 是两层完全独立的东西</strong>：</p><ul><li><strong>SNI 决定"能不能过审查"</strong>。它只看域名，看不见路径。</li><li><strong>路径决定"进来之后去哪"</strong>。Caddy 按 <code>/et/*</code> 这条规则分流。</li></ul><p>所以中间设备看到的是"这个学生在访问 funnycode.site"，跟访问这个博客的首页一模一样。
+它既不知道路径是 <code>/et/</code>，也不知道里面跑的是隧道 —— 那部分在 TLS 加密里面。</p><p>Caddy 这边要加的规则就三行，放在 <code>funnycode.site</code> 那个站点块里：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-caddyfile data-lang=caddyfile><span class=line><span class=cl><span class=c1>	# EasyTier 中继：WSS 入口，SNI=funnycode.site 可过校园网
+</span></span></span><span class=line><span class=cl>	<span class=gh>handle</span> <span class=gh>/et/*</span> <span class=p>{</span>
+</span></span><span class=line><span class=cl>		<span class=k>reverse_proxy</span> <span class=n>127.0.0.1</span><span class=p>:</span><span class=mi>11011</span>
+</span></span><span class=line><span class=cl>	<span class=p>}</span>
+</span></span></code></pre></div><p>Caddy 默认就会转发 WebSocket 的 <code>Upgrade</code> 头，不用像 nginx 那样手动加两行 <code>proxy_set_header</code>。</p><h3 id=这里有个特别容易误判的地方>这里有个特别容易误判的地方</h3><p>配完之后验证，会看到：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>curl -o /dev/null -w <span class=s1>&#39;%{http_code}\n&#39;</span> https://funnycode.site/et/
+</span></span><span class=line><span class=cl><span class=c1># 400</span>
+</span></span></code></pre></div><p><strong>400 是对的，不是错的。</strong></p><p>因为 <code>curl</code> 发的是一个普通 GET，不是 WebSocket 握手。Caddy 老老实实把它转到了 11011，
+EasyTier 收到一个"不是 WebSocket 的请求"，于是回了 400。</p><p>如果这里返回的是 <strong>404</strong>，说明 Caddy 那条 <code>handle</code> 根本没生效，请求落到别处去了。
+如果返回 <strong>502</strong>，说明 Caddy 转发了，但 11011 上没人听 —— 中继没起来。</p><p>三个状态码对应三个完全不同的故障，别看到 400 就以为配错了。我第一次看到 400 的时候还去翻了半天日志。</p><h2 id=五装中继云服务器>五、装中继（云服务器）</h2><h3 id=51-拿二进制>5.1 拿二进制</h3><p>版本 2.6.4。这里遇到第一个坑：<strong>GitHub 的 release 资源下不下来</strong>。</p><p><code>github.com</code> 本身能打开，但真正的文件在 <code>release-assets.githubusercontent.com</code>，那台机器直接超时。
+25 MB 的包下了七八次，每次都在几 MB 处断掉，<code>unzip</code> 报"找不到中央目录"。</p><p>解法是套一层镜像前缀，而且要在<strong>目标机器上</strong>跑（哪台能通因网络而异）：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=nb>cd</span> /tmp
+</span></span><span class=line><span class=cl><span class=nv>R</span><span class=o>=</span><span class=s2>&#34;EasyTier/EasyTier/releases/download/v2.6.4/easytier-linux-x86_64-v2.6.4.zip&#34;</span>
+</span></span><span class=line><span class=cl>curl -sSL -o et.zip <span class=s2>&#34;https://ghfast.top/https://github.com/</span><span class=nv>$R</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>unzip -q et.zip -d et
+</span></span><span class=line><span class=cl>sudo install -m <span class=m>755</span> et/easytier-linux-x86_64/easytier-core /usr/local/bin/
+</span></span><span class=line><span class=cl>sudo install -m <span class=m>755</span> et/easytier-linux-x86_64/easytier-cli  /usr/local/bin/
+</span></span></code></pre></div><p>装好之后 <code>easytier-core --version</code> 应该打印 <code>2.6.4-8428a89d</code>。</p><p>家里那台<strong>不用再下一次</strong>，直接从这台 <code>scp</code> 过去就行，两个二进制一共 10 MB。</p><h3 id=52-密钥>5.2 密钥</h3><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sudo mkdir -p /etc/easytier
+</span></span><span class=line><span class=cl>openssl rand -base64 <span class=m>32</span> <span class=p>|</span> tr -d <span class=s1>&#39;\n&#39;</span> <span class=p>|</span> sudo tee /etc/easytier/secret  &gt;/dev/null
+</span></span><span class=line><span class=cl>openssl rand -base64 <span class=m>32</span> <span class=p>|</span> tr -d <span class=s1>&#39;\n&#39;</span> <span class=p>|</span> sudo tee /etc/easytier/privkey &gt;/dev/null
+</span></span><span class=line><span class=cl>sudo chmod <span class=m>600</span> /etc/easytier/secret /etc/easytier/privkey
+</span></span></code></pre></div><p>两个东西，作用完全不同：</p><ul><li><strong><code>secret</code>（网络密钥）</strong>：全网络共享，相当于"这个网络的入场券"。所有节点必须一模一样。</li><li><strong><code>privkey</code>（节点私钥）</strong>：<strong>每台机器自己一份，而且必须固定下来</strong>。</li></ul><p><code>privkey</code> 这一条要划重点：如果每次启动随机生成，那么中继重启一次，公钥就变了，
+任何 pin 了它公钥的客户端都会握手失败。症状是"中继明明在跑，节点就是连不上"，
+而且重启一次好一次、再重启又坏 —— 非常难查。所以它是文件，不是每次现生成。</p><h3 id=53-启动脚本>5.3 启动脚本</h3><p><code>/usr/local/bin/easytier-relay</code>：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=cp>#!/bin/bash
+</span></span></span><span class=line><span class=cl><span class=c1># EasyTier 中继（云服务器）</span>
+</span></span><span class=line><span class=cl><span class=c1># 角色：转发密文 + 帮助打洞。持有网络密钥，但不持有家庭组密钥。</span>
+</span></span><span class=line><span class=cl><span class=nb>set</span> -euo pipefail
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>SECRET</span><span class=o>=</span><span class=s2>&#34;</span><span class=k>$(</span>cat /etc/easytier/secret<span class=k>)</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>PRIVKEY</span><span class=o>=</span><span class=s2>&#34;</span><span class=k>$(</span>cat /etc/easytier/privkey<span class=k>)</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nb>exec</span> /usr/local/bin/easytier-core <span class=se>\
+</span></span></span><span class=line><span class=cl>  --network-name home <span class=se>\
+</span></span></span><span class=line><span class=cl>  --network-secret <span class=s2>&#34;</span><span class=nv>$SECRET</span><span class=s2>&#34;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>  --hostname relay <span class=se>\
+</span></span></span><span class=line><span class=cl>  --ipv4 10.1.1.1 <span class=se>\
+</span></span></span><span class=line><span class=cl>  --secure-mode <span class=nb>true</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>  --local-private-key <span class=s2>&#34;</span><span class=nv>$PRIVKEY</span><span class=s2>&#34;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>  --listeners tcp://0.0.0.0:11010 <span class=se>\
+</span></span></span><span class=line><span class=cl>  --listeners ws://127.0.0.1:11011 <span class=se>\
+</span></span></span><span class=line><span class=cl>  --rpc-portal 127.0.0.1:15888 <span class=se>\
+</span></span></span><span class=line><span class=cl>  --relay-network-whitelist home <span class=se>\
+</span></span></span><span class=line><span class=cl>  -c /etc/easytier/relay.toml
+</span></span></code></pre></div><p>逐条说人话：</p><table><thead><tr><th>参数</th><th>干什么</th><th>为什么这么设</th></tr></thead><tbody><tr><td><code>--network-name home</code></td><td>网络名</td><td>名字对上才是一张网</td></tr><tr><td><code>--network-secret</code></td><td>网络密钥</td><td>从文件读，不写在脚本里</td></tr><tr><td><code>--ipv4 10.1.1.1</code></td><td>虚拟 IP</td><td>中继固定占 <code>.1</code>，好记</td></tr><tr><td><code>--secure-mode true</code></td><td>端到端加密</td><td><strong>中继自己解不开转发的流量</strong></td></tr><tr><td><code>--local-private-key</code></td><td>固定身份</td><td>见上面那段，必须固定</td></tr><tr><td><code>--listeners ws://127.0.0.1:11011</code></td><td>WebSocket 只绑回环</td><td>公网只能从 Caddy 进来</td></tr><tr><td><code>--rpc-portal 127.0.0.1:15888</code></td><td>管理接口只绑回环</td><td>这个接口能改配置，绝不能对外</td></tr><tr><td><code>--relay-network-whitelist home</code></td><td>只服务 home 这张网</td><td>不给自己揽别的活</td></tr></tbody></table><p><code>--listeners tcp://0.0.0.0:11010</code> 这个端口其实<strong>是关着的</strong> —— 云服务器安全组没放行，
+从外面探测是 <code>CLOSED</code>。它留着是给同机或内网调试用的，实际对外只有 443 那一条路。</p><p><strong>这反而是好事</strong>：整台机器的入口收敛成了"443 上的一个 HTTPS 路径"，攻击面和一台普通网站一样。</p><h3 id=54-systemd>5.4 systemd</h3><p><code>/etc/systemd/system/easytier-relay.service</code>：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-ini data-lang=ini><span class=line><span class=cl><span class=k>[Unit]</span>
+</span></span><span class=line><span class=cl><span class=na>Description</span><span class=o>=</span><span class=s>EasyTier relay node (funnycode)</span>
+</span></span><span class=line><span class=cl><span class=na>After</span><span class=o>=</span><span class=s>network-online.target</span>
+</span></span><span class=line><span class=cl><span class=na>Wants</span><span class=o>=</span><span class=s>network-online.target</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>[Service]</span>
+</span></span><span class=line><span class=cl><span class=na>Type</span><span class=o>=</span><span class=s>simple</span>
+</span></span><span class=line><span class=cl><span class=c1># 启动日志会打印网络密钥和私钥，压到 warn 避免落盘泄露</span>
+</span></span><span class=line><span class=cl><span class=na>Environment</span><span class=o>=</span><span class=s>RUST_LOG=warn</span>
+</span></span><span class=line><span class=cl><span class=na>ExecStart</span><span class=o>=</span><span class=s>/usr/local/bin/easytier-relay</span>
+</span></span><span class=line><span class=cl><span class=na>Restart</span><span class=o>=</span><span class=s>always</span>
+</span></span><span class=line><span class=cl><span class=na>RestartSec</span><span class=o>=</span><span class=s>5</span>
+</span></span><span class=line><span class=cl><span class=na>LimitNOFILE</span><span class=o>=</span><span class=s>65535</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>[Install]</span>
+</span></span><span class=line><span class=cl><span class=na>WantedBy</span><span class=o>=</span><span class=s>multi-user.target</span>
+</span></span></code></pre></div><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sudo systemctl daemon-reload <span class=o>&amp;&amp;</span> sudo systemctl <span class=nb>enable</span> --now easytier-relay
+</span></span></code></pre></div><p><strong><code>RUST_LOG=warn</code> 不是可选项。</strong> easytier-core 默认在 INFO 级别把网络密钥和私钥原样打到 stdout，
+而 stdout 会进 journald。也就是说，装完之后你的密钥就躺在 <code>journalctl</code> 里了，任何能读日志的人都能拿到。
+这一行是必须的，不是优化。</p><h2 id=六装节点家里那台>六、装节点（家里那台）</h2><p><code>/usr/local/bin/easytier-home</code>：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=cp>#!/bin/bash
+</span></span></span><span class=line><span class=cl><span class=c1># EasyTier 家庭节点（homeserver）</span>
+</span></span><span class=line><span class=cl><span class=c1># 角色：被访问目标（门卫）。ACL 默认拒绝，只放行 family 组。</span>
+</span></span><span class=line><span class=cl><span class=nb>set</span> -euo pipefail
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>SECRET</span><span class=o>=</span><span class=s2>&#34;</span><span class=k>$(</span>cat /etc/easytier/secret<span class=k>)</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>PRIVKEY</span><span class=o>=</span><span class=s2>&#34;</span><span class=k>$(</span>cat /etc/easytier/privkey<span class=k>)</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nb>exec</span> /usr/local/bin/easytier-core <span class=se>\
+</span></span></span><span class=line><span class=cl>  --network-name home <span class=se>\
+</span></span></span><span class=line><span class=cl>  --network-secret <span class=s2>&#34;</span><span class=nv>$SECRET</span><span class=s2>&#34;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>  --hostname homeserver <span class=se>\
+</span></span></span><span class=line><span class=cl>  --ipv4 10.1.1.2 <span class=se>\
+</span></span></span><span class=line><span class=cl>  --secure-mode <span class=nb>true</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>  --local-private-key <span class=s2>&#34;</span><span class=nv>$PRIVKEY</span><span class=s2>&#34;</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>  --no-listener <span class=se>\
+</span></span></span><span class=line><span class=cl>  --rpc-portal 127.0.0.1:15888 <span class=se>\
+</span></span></span><span class=line><span class=cl>  --peers wss://funnycode.site:443/et/ <span class=se>\
+</span></span></span><span class=line><span class=cl>  -c /etc/easytier/home.toml
+</span></span></code></pre></div><p>跟中继的差别只有三处，但每一处都有意义：</p><ul><li><strong><code>--peers wss://funnycode.site:443/et/</code></strong> —— 主动去连中继的 WSS 入口。
+<strong>结尾那个斜杠不能少。</strong> 少了 <code>wss://host:443/et</code> 握手会失败，而且报的错看着像 TLS 问题，
+会把人往证书方向带偏。</li><li><strong><code>--no-listener</code></strong> —— 不监听任何端口。家里这台永远只主动往外连，
+路由器和这台机器上都不需要任何入向规则。这一条跟"绝不在家开公网端口"是同一件事。</li><li><strong><code>-c /etc/easytier/home.toml</code></strong> —— 带一份 ACL 配置，这就是"门卫"。</li></ul><p>家里的 systemd 单元跟中继一模一样，只把名字和 <code>ExecStart</code> 换掉：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-ini data-lang=ini><span class=line><span class=cl><span class=k>[Unit]</span>
+</span></span><span class=line><span class=cl><span class=na>Description</span><span class=o>=</span><span class=s>EasyTier node (homeserver)</span>
+</span></span><span class=line><span class=cl><span class=na>After</span><span class=o>=</span><span class=s>network-online.target</span>
+</span></span><span class=line><span class=cl><span class=na>Wants</span><span class=o>=</span><span class=s>network-online.target</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>[Service]</span>
+</span></span><span class=line><span class=cl><span class=na>Type</span><span class=o>=</span><span class=s>simple</span>
+</span></span><span class=line><span class=cl><span class=na>Environment</span><span class=o>=</span><span class=s>RUST_LOG=warn</span>
+</span></span><span class=line><span class=cl><span class=na>ExecStart</span><span class=o>=</span><span class=s>/usr/local/bin/easytier-home</span>
+</span></span><span class=line><span class=cl><span class=na>Restart</span><span class=o>=</span><span class=s>always</span>
+</span></span><span class=line><span class=cl><span class=na>RestartSec</span><span class=o>=</span><span class=s>5</span>
+</span></span><span class=line><span class=cl><span class=na>LimitNOFILE</span><span class=o>=</span><span class=s>65535</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>[Install]</span>
+</span></span><span class=line><span class=cl><span class=na>WantedBy</span><span class=o>=</span><span class=s>multi-user.target</span>
+</span></span></code></pre></div><p>每加一台设备，<code>--ipv4</code> 往后递增（<code>.3</code>、<code>.4</code>、<code>.5</code>），<code>--hostname</code> 唯一。
+目前 <code>.3</code> 是 iPhone，<code>.4</code> 是 Windows 笔记本，<code>.5</code> 是 Ubuntu 笔记本。</p><h2 id=七easytier-guard中继能借道但不能进门>七、easytier-guard：中继能借道，但不能进门</h2><p>这是我最在意的一块，也是唯一一处"除了 EasyTier 自己的机制之外还要自己动手"的地方。</p><h3 id=问题在哪>问题在哪</h3><p>先想清楚一件事：<strong>中继也是这张网的一个成员</strong>。它有虚拟 IP（10.1.1.1），
+它能 ping 到 <code>10.1.1.2</code>，理论上也能直接连家里的 22、445、8080。</p><p><code>--secure-mode</code> 解决的是"它读不懂内容"，不是"它碰不到你"。
+即使它解不开加密的载荷，它照样能发一个 SYN 到你的 22 端口 —— 那是它自己发的，它知道内容。</p><p>所以安全边界不能建在中继上。<strong>必须建在被保护的那一端，也就是家里这台。</strong></p><h3 id=第一层acleasytier-自己的>第一层：ACL（EasyTier 自己的）</h3><p><code>/etc/easytier/home.toml</code>：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-toml data-lang=toml><span class=line><span class=cl><span class=c># 家庭节点 ACL —— 门卫</span>
+</span></span><span class=line><span class=cl><span class=c># 关键：规则写在这台机器上，中继改不了</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>group</span><span class=p>]</span>
+</span></span><span class=line><span class=cl><span class=nx>members</span> <span class=p>=</span> <span class=p>[</span><span class=s2>&#34;family&#34;</span><span class=p>]</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=c># 组目录：用来验证别人声称的身份</span>
+</span></span><span class=line><span class=cl><span class=p>[[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>group</span><span class=p>.</span><span class=nx>declares</span><span class=p>]]</span>
+</span></span><span class=line><span class=cl><span class=nx>group_name</span> <span class=p>=</span> <span class=s2>&#34;family&#34;</span>
+</span></span><span class=line><span class=cl><span class=nx>group_secret</span> <span class=p>=</span> <span class=s2>&#34;&lt;家庭组密钥&gt;&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>group</span><span class=p>.</span><span class=nx>declares</span><span class=p>]]</span>
+</span></span><span class=line><span class=cl><span class=nx>group_name</span> <span class=p>=</span> <span class=s2>&#34;relay&#34;</span>
+</span></span><span class=line><span class=cl><span class=nx>group_secret</span> <span class=p>=</span> <span class=s2>&#34;&lt;中继组密钥&gt;&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>chains</span><span class=p>]]</span>
+</span></span><span class=line><span class=cl><span class=nx>name</span> <span class=p>=</span> <span class=s2>&#34;inbound_guard&#34;</span>
+</span></span><span class=line><span class=cl><span class=nx>chain_type</span> <span class=p>=</span> <span class=mi>1</span>        <span class=c># 1 = 入站</span>
+</span></span><span class=line><span class=cl><span class=nx>description</span> <span class=p>=</span> <span class=s2>&#34;只允许 family 组访问本机&#34;</span>
+</span></span><span class=line><span class=cl><span class=nx>enabled</span> <span class=p>=</span> <span class=kc>true</span>
+</span></span><span class=line><span class=cl><span class=nx>default_action</span> <span class=p>=</span> <span class=mi>2</span>    <span class=c># 2 = 拒绝</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>chains</span><span class=p>.</span><span class=nx>rules</span><span class=p>]]</span>
+</span></span><span class=line><span class=cl><span class=nx>name</span> <span class=p>=</span> <span class=s2>&#34;allow_family&#34;</span>
+</span></span><span class=line><span class=cl><span class=nx>priority</span> <span class=p>=</span> <span class=mi>1000</span>
+</span></span><span class=line><span class=cl><span class=nx>enabled</span> <span class=p>=</span> <span class=kc>true</span>
+</span></span><span class=line><span class=cl><span class=nx>protocol</span> <span class=p>=</span> <span class=mi>5</span>
+</span></span><span class=line><span class=cl><span class=nx>action</span> <span class=p>=</span> <span class=mi>1</span>            <span class=c># 1 = 放行</span>
+</span></span><span class=line><span class=cl><span class=nx>source_groups</span> <span class=p>=</span> <span class=p>[</span><span class=s2>&#34;family&#34;</span><span class=p>]</span>
+</span></span></code></pre></div><p>翻译一下：<strong>默认拒绝一切入站，只放行自称属于 <code>family</code> 组的人。</strong></p><p>那中继呢？中继那边的配置是：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-toml data-lang=toml><span class=line><span class=cl><span class=p>[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>group</span><span class=p>]</span>
+</span></span><span class=line><span class=cl><span class=nx>members</span> <span class=p>=</span> <span class=p>[</span><span class=s2>&#34;relay&#34;</span><span class=p>]</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=p>[[</span><span class=nx>acl</span><span class=p>.</span><span class=nx>acl_v1</span><span class=p>.</span><span class=nx>group</span><span class=p>.</span><span class=nx>declares</span><span class=p>]]</span>
+</span></span><span class=line><span class=cl><span class=nx>group_name</span> <span class=p>=</span> <span class=s2>&#34;relay&#34;</span>
+</span></span><span class=line><span class=cl><span class=nx>group_secret</span> <span class=p>=</span> <span class=s2>&#34;&lt;中继组密钥&gt;&#34;</span>
+</span></span></code></pre></div><p>它<strong>只声明自己是 relay 组</strong>，不声明 family。</p><p>这个不对称是关键：家里这台机器持有 <code>family</code> 和 <code>relay</code> 两个组的密钥（用来<strong>验证</strong>别人），
+中继只持有 <code>relay</code> 一个。<strong>中继手里没有 family 的密钥，所以它连"我是家庭成员"这句话都说不出来。</strong></p><p>而中转流量不受影响 —— 别人通过中继访问家里时，家里看到的源地址是对方的虚拟 IP，
+不是中继的。所以放行 family、拒绝中继，两者互不干扰。</p><p>实测计数器（家里这台）：</p><pre tabindex=0><code>InboundPacketsAllowed: 946250
+InboundPacketsDropped: 11128
+</code></pre><p>一个在涨，另一个也在涨。这就是"门卫真的在工作"的样子。</p><h3 id=第二层iptables不信-acl-也能挡>第二层：iptables（不信 ACL 也能挡）</h3><p>ACL 是应用层的东西。配置写错一个字母、版本升级改了字段名、或者哪天有人把 <code>default_action</code> 改成 0，
+门就开了，而且<strong>没有任何提示</strong>。</p><p>所以我又加了一道内核层的网。<code>/usr/local/bin/easytier-guard.sh</code>：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=cp>#!/bin/bash
+</span></span></span><span class=line><span class=cl><span class=c1># easytier-guard：让中继（云服务器）只能借道，不能访问本机任何服务</span>
+</span></span><span class=line><span class=cl><span class=c1># 用法: easytier-guard.sh [接口] [apply|status|remove]</span>
+</span></span><span class=line><span class=cl><span class=nb>set</span> -u
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=nv>IF</span><span class=o>=</span><span class=s2>&#34;</span><span class=si>${</span><span class=nv>1</span><span class=k>:-</span><span class=nv>tun0</span><span class=si>}</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl><span class=nv>CHAIN</span><span class=o>=</span><span class=s2>&#34;ET-GUARD&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>apply<span class=o>()</span> <span class=o>{</span>
+</span></span><span class=line><span class=cl>  iptables -N <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> 2&gt;/dev/null
+</span></span><span class=line><span class=cl>  iptables -F <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=c1># 1) 已知家庭设备：放行（新增设备要在这里加一行）</span>
+</span></span><span class=line><span class=cl>  iptables -A <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> -s 10.1.1.3/32 -j RETURN   <span class=c1># iPhone</span>
+</span></span><span class=line><span class=cl>  iptables -A <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> -s 10.1.1.4/32 -j RETURN   <span class=c1># Windows 笔记本</span>
+</span></span><span class=line><span class=cl>  iptables -A <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> -s 10.1.1.5/32 -j RETURN   <span class=c1># Ubuntu 笔记本</span>
+</span></span><span class=line><span class=cl>  <span class=c1># 中继(10.1.1.1)：只放行&#34;回包&#34;，自己发起的连接一律丢弃</span>
+</span></span><span class=line><span class=cl>  iptables -A <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+</span></span><span class=line><span class=cl>  <span class=c1># 2) 其余一律丢弃 —— 含中继 10.1.1.1 以及任何未知节点</span>
+</span></span><span class=line><span class=cl>  <span class=c1>#    转发别人的包走 FORWARD 链，不受影响</span>
+</span></span><span class=line><span class=cl>  iptables -A <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> -j DROP
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=c1># 挂到 tun0 的 INPUT 上（只挂一次）</span>
+</span></span><span class=line><span class=cl>  iptables -C INPUT -i <span class=s2>&#34;</span><span class=nv>$IF</span><span class=s2>&#34;</span> -j <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span> 2&gt;/dev/null <span class=o>||</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>    iptables -I INPUT <span class=m>1</span> -i <span class=s2>&#34;</span><span class=nv>$IF</span><span class=s2>&#34;</span> -j <span class=s2>&#34;</span><span class=nv>$CHAIN</span><span class=s2>&#34;</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=c1># 3) EasyTier RPC 端口只允许本机访问（防远程改配置）</span>
+</span></span><span class=line><span class=cl>  iptables -C INPUT -p tcp --dport <span class=m>15888</span> ! -i lo -j DROP 2&gt;/dev/null <span class=o>||</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>    iptables -I INPUT <span class=m>2</span> -p tcp --dport <span class=m>15888</span> ! -i lo -j DROP
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  <span class=c1># 4) 云服务器（tailnet 地址）不得主动连接本机任何服务</span>
+</span></span><span class=line><span class=cl>  <span class=c1>#    只挡 NEW，已建立的回包/家里主动发起的连接不受影响</span>
+</span></span><span class=line><span class=cl>  iptables -C INPUT -m conntrack --ctstate NEW -s &lt;云服务器的 tailnet 地址&gt; -j DROP 2&gt;/dev/null <span class=o>||</span> <span class=se>\
+</span></span></span><span class=line><span class=cl>    iptables -I INPUT <span class=m>3</span> -m conntrack --ctstate NEW -s &lt;云服务器的 tailnet 地址&gt; -j DROP
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl>  status
+</span></span><span class=line><span class=cl><span class=o>}</span>
+</span></span></code></pre></div><p>四段规则，每一段挡的是不同的东西：</p><p><strong>① 白名单 + 兜底 DROP</strong>：只认识 <code>.3/.4/.5</code> 三台，其他一律丢。
+这样即使中继被攻破、即使有人拿着网络密钥新加了一台节点（它会拿到一个新 IP），也进不来。
+这比"只挡 10.1.1.1"强得多 —— 单挡一个地址，换个 IP 就绕过了。</p><p><strong>② conntrack 例外（这行最容易漏）</strong>：如果只有白名单加 DROP，会把自己的路也切断。
+家里这台主动去连云服务器上的服务（比如心跳接口）时，<strong>对方回来的 SYN-ACK 也会被这条 DROP 吃掉</strong>，
+症状是连接永远建不起来，<code>tcpdump</code> 能看到 SYN-ACK 出去了、客户端还在重传 SYN。
+<code>ESTABLISHED,RELATED</code> 只匹配"已经存在的连接"，所以别人的连接照样起不来，自己的回包能过。</p><p><strong>③ 15888 只准本机</strong>：这个端口是 EasyTier 的管理 RPC，能改配置 —— 包括 ACL 链。
+暴露出去等于把门卫的遥控器挂在门外。</p><p><strong>④ 挡住云服务器的 tailnet 身份</strong>：这条是后来才想起来的。
+那台云服务器上还跑着一个 Tailscale 容器，它有 <code>&lt;云服务器的 tailnet 地址></code> 这个地址。
+也就是说，除了 EasyTier 这条路，它还有<strong>另一扇门</strong>能敲到家里。
+只挡 <code>NEW</code>（新建连接），所以家里主动发起的连接不受影响。</p><p>第四段其实指向一个更大的道理：<strong>你封了一条路，不等于封了所有路</strong>。
+做安全审计的时候要把那台机器上所有的网络身份都列出来，而不是只盯着刚装的那一个。</p><h3 id=让它开机自动生效>让它开机自动生效</h3><p>iptables 规则只活在内存里，重启就没了。而这台机器没有 <code>netfilter-persistent</code>，所以用一个 oneshot 单元：</p><p><code>/etc/systemd/system/easytier-guard.service</code>：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-ini data-lang=ini><span class=line><span class=cl><span class=k>[Unit]</span>
+</span></span><span class=line><span class=cl><span class=na>Description</span><span class=o>=</span><span class=s>EasyTier guard — keep the relay out of local services</span>
+</span></span><span class=line><span class=cl><span class=na>After</span><span class=o>=</span><span class=s>network-online.target easytier-home.service</span>
+</span></span><span class=line><span class=cl><span class=na>Wants</span><span class=o>=</span><span class=s>network-online.target easytier-home.service</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>[Service]</span>
+</span></span><span class=line><span class=cl><span class=na>Type</span><span class=o>=</span><span class=s>oneshot</span>
+</span></span><span class=line><span class=cl><span class=na>ExecStart</span><span class=o>=</span><span class=s>/usr/local/bin/easytier-guard.sh tun0 apply</span>
+</span></span><span class=line><span class=cl><span class=na>RemainAfterExit</span><span class=o>=</span><span class=s>yes</span>
+</span></span><span class=line><span class=cl>
+</span></span><span class=line><span class=cl><span class=k>[Install]</span>
+</span></span><span class=line><span class=cl><span class=na>WantedBy</span><span class=o>=</span><span class=s>multi-user.target</span>
+</span></span></code></pre></div><p><code>RemainAfterExit=yes</code> 让它在脚本跑完之后仍显示 <code>active (exited)</code> —— 这样它才是个"状态"，
+否则 systemd 会认为它"跑完就结束了"，重启时不会重跑。</p><p><code>After=easytier-home.service</code> 是因为脚本要往 <code>tun0</code> 上挂链，接口得先存在。</p><p>现在的实际状态：</p><pre tabindex=0><code>$ iptables -S INPUT
+-P INPUT ACCEPT
+-A INPUT -i tun0 -j ET-GUARD
+-A INPUT ! -i lo -p tcp -m tcp --dport 15888 -j DROP
+-A INPUT -s &lt;云服务器的 tailnet 地址&gt;/32 -m conntrack --ctstate NEW -j DROP
+</code></pre><p>三条都在，<code>ET-GUARD</code> 链挂在 INPUT 第一行。</p><h2 id=八网络名和密钥怎么管>八、网络名和密钥怎么管</h2><p>装完之后 <code>/etc/easytier/</code> 里躺着五个文件，全是 <code>600 root:root</code>：</p><pre tabindex=0><code>-rw------- family      # 家庭组密钥（家里这台持有，中继不持有）
+-rw------- home.toml   # 家里的 ACL 配置
+-rw------- privkey     # 本节点身份私钥（每台不同，固定不变）
+-rw------- relaykey    # 中继组密钥
+-rw------- secret      # 网络密钥（全网共享）
+</code></pre><p>管理上有四条规矩，都是从上面那些道理推出来的：</p><p><strong>1. <code>secret</code> 一样，<code>privkey</code> 不一样。</strong>
+网络密钥是"入场券"，全网一份；节点私钥是"身份证"，每台一份且固定。</p><p><strong>2. 组密钥按"谁需要验证谁"来发，不是见者有份。</strong>
+家里这台要验证 family 和 relay 两种身份，所以它拿两个；
+中继只需要声明自己是 relay，所以它只拿 relay 那一个。
+<strong>绝对不能把 family 的密钥给中继</strong> —— 给了之后它就能宣布自己是家庭成员，门卫形同虚设。</p><p><strong>3. 网络名（<code>home</code>）不是安全措施。</strong>
+它只是个标签，防止误连到别的网络。真正的门槛是 <code>secret</code> 加 <code>secure-mode</code>。
+别指望"名字没人知道"能挡住什么。</p><p><strong>4. 换密钥 = 全网一起换。</strong>
+<code>secret</code> 一改，所有节点都得同步改，否则连不上。这是个协调动作，不是改一个文件。
+所以密钥生成一次就好好存着，别手贱去轮换。</p><p>顺便说虚拟网段的选择。一开始用的是 <code>10.144.144.0/24</code>（EasyTier 文档的示例网段），
+后来改成了 <code>10.1.1.0/24</code>。理由：</p><ul><li>必须是私有地址。有人会想用 <code>1.1.1.x</code> 这种"好记"的段 —— 那会让客户端以为整个 <code>1.1.1.0/24</code> 都在链路上，
+于是发往 <code>1.1.1.1</code> 的 DNS 查询全进了隧道，网直接废掉，而且没人会想到是 VPN 干的。</li><li>要避开家里的真实网段。我家是 <code>192.168.6.0/24</code>，所以 <code>10.x</code> 是安全的。</li><li>短。手机上要手输的地址，<code>10.1.1.2</code> 比 <code>10.144.144.2</code> 舒服太多。</li></ul><p><strong>但改网段是一次"全网协同手术"，不是改个数字</strong>：中继的 <code>--ipv4</code> 要改、家里的要改、
+每一台客户端都要重新粘贴配置、每一个写了旧网段的 allowlist（Samba 的 <code>hosts allow</code>、
+nginx 的 <code>geo</code> 映射、sshd 的 <code>Match Address</code>）都要跟着改。</p><p>我当时以为改完服务端就完了，结果手机还一直用旧地址发包，在 Samba 日志里表现为
+<code>Denied connection from 10.144.144.3</code> —— 看着像 ACL 坏了，其实是客户端没跟上。
+<strong>这个网段选定之后就当它永久。</strong> 想清楚再定，别改第二次。</p><h2 id=九怎么验证别信-systemctl>九、怎么验证（别信 systemctl）</h2><p><code>systemctl is-active easytier-home</code> 返回 <code>active</code> 只证明<strong>进程存在</strong>。
+进程活着但隧道没建起来、或者建起来了但服务拒绝新网段，它照样是 <code>active</code>。</p><p>按顺序做这三层，每一层证明的东西不一样：</p><h3 id=第一层隧道本身>第一层：隧道本身</h3><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>easytier-cli peer
+</span></span></code></pre></div><pre tabindex=0><code>| ipv4        | hostname   | cost | lat(ms) | loss | tunnel | NAT            |
+|-------------|------------|------|---------|------|--------|----------------|
+| 10.1.1.2/24 | homeserver | Local| -       | -    | -      | PortRestricted |
+| 10.1.1.1/24 | relay      | p2p  | 25.30   | 0.0% | wss    | PortRestricted |
+</code></pre><p>看三列：<code>cost</code> 是 <code>p2p</code>（打通了）、<code>loss</code> 是 <code>0.0%</code>、<strong><code>tunnel</code> 是 <code>wss</code></strong>。
+最后这一列最重要 —— 它证明流量真的走了 TLS 那条路，而不是别的什么回退路径。</p><h3 id=第二层三层可达>第二层：三层可达</h3><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>ip -br addr show tun0        <span class=c1># 10.1.1.2/24</span>
+</span></span><span class=line><span class=cl>ping -c <span class=m>3</span> 10.1.1.1
+</span></span></code></pre></div><h3 id=第三层真实服务>第三层：真实服务</h3><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>nc -z -w3 10.1.1.1 <span class=m>22</span>
+</span></span><span class=line><span class=cl>ssh ubuntu@10.1.1.1 <span class=s1>&#39;echo $SSH_CLIENT&#39;</span>
+</span></span></code></pre></div><p>最后这条要看到 <code>SSH_CLIENT</code> 里的源地址是 <code>10.1.1.2</code> —— 这才证明"整条路径通了"，
+而不只是"握手成功了"。</p><p>如果 <code>nc</code> 通了但 <code>ssh</code> 报 <code>Permission denied</code>，那是密钥授权问题，不是隧道问题。<strong>别去查 VPN。</strong></p><h3 id=反向验证门卫真的挡住了>反向验证：门卫真的挡住了</h3><p>光验证"能进"不够，还得验证"中继进不来"。从云服务器那边往家里探：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=c1># 在云服务器上执行</span>
+</span></span><span class=line><span class=cl>nc -z -w3 10.1.1.2 <span class=m>22</span>     <span class=c1># 应该失败</span>
+</span></span><span class=line><span class=cl>nc -z -w3 10.1.1.2 <span class=m>445</span>    <span class=c1># 应该失败</span>
+</span></span></code></pre></div><p>以及看计数器：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl><span class=c1># 在家里这台执行</span>
+</span></span><span class=line><span class=cl>easytier-cli acl stats
+</span></span></code></pre></div><p><code>InboundPacketsDropped</code> 应该在涨。<strong>一个只在涨 Allowed、Dropped 永远是 0 的门卫，说明它谁都没拦。</strong></p><h3 id=一个会骗人的现象>一个会骗人的现象</h3><p><strong><code>ping</code> 通不代表端口开着。</strong></p><p>EasyTier 在虚拟层里自己回答 ICMP，包根本没交给家里那台机器的内核。
+所以中继可以 <code>ping 3 received</code> 全通，同时家里每一个 TCP 端口都拒绝它 ——
+看起来像"防火墙没生效"，其实是 ICMP 走的是另一条路。</p><p>想确认，对比 <code>nstat -az | grep -E '^IcmpInMsgs'</code> 前后的值：没变，就说明主机内核根本没看见那个包。
+<strong>结论：ICMP 只证明"对方在线"，不证明任何可达性。端口探测才是证据。</strong></p><h2 id=十踩过的坑一条条记>十、踩过的坑，一条条记</h2><h3 id=1-400-不是错误404-才是>1. 400 不是错误，404 才是</h3><p>上面说过了，再强调一次：<code>curl https://funnycode.site/et/</code> 返回 <strong>400 = 配对了</strong>。
+400 说明请求到了 EasyTier，只是它不接受非 WebSocket。404 才是路由没生效。</p><h3 id=2-caddy-reload-在这台机器上永远是失败>2. <code>caddy reload</code> 在这台机器上永远是失败</h3><p>这台 Caddy 的全局配置里有 <code>admin off</code>，管理 API 是关掉的。于是：</p><pre tabindex=0><code>Error: sending configuration to instance: Post &#34;http://127.0.0.1:2019/load&#34;:
+connect: connection refused
+</code></pre><p>而 <code>caddy validate</code> 会告诉你"配置有效" —— 于是你以为改好了，实际线上跑的还是旧配置，新路径一直 404。</p><p><strong>唯一的办法是 <code>systemctl restart caddy</code></strong>，代价是整站断 1～2 秒（博客、git、tasks、心跳全在这一台上）。
+所以改 Caddyfile 是个"有代价的操作"，不是随手改改。流程固定成：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak.<span class=k>$(</span>date +%Y%m%d%H%M%S<span class=k>)</span>
+</span></span><span class=line><span class=cl><span class=c1># 改</span>
+</span></span><span class=line><span class=cl>sudo caddy validate --config /etc/caddy/Caddyfile
+</span></span><span class=line><span class=cl>sudo systemctl restart caddy
+</span></span><span class=line><span class=cl><span class=c1># 然后必须同时检查老站和新路径</span>
+</span></span><span class=line><span class=cl>curl -o /dev/null -w <span class=s1>&#39;%{http_code}\n&#39;</span> https://funnycode.site/
+</span></span><span class=line><span class=cl>curl -o /dev/null -w <span class=s1>&#39;%{http_code}\n&#39;</span> https://funnycode.site/et/
+</span></span></code></pre></div><p>最后那两行是重点。<strong>加一条路由是"动线上网站"，不是"装个软件"</strong> ——
+改完只看新路径通了就收工，是老站挂了都不知道。</p><h3 id=3-iptables--a-写在--j-return-后面是死规则>3. <code>iptables -A</code> 写在 <code>-j RETURN</code> 后面是死规则</h3><p>我第一版 guard 脚本是往链尾追加 DROP，结果前面有一条 <code>RETURN</code>，DROP 永远到不了。
+而 <code>iptables -S</code> 仍然会把这条规则列出来 —— <strong>规则存在，但什么也不做。</strong></p><p>看规则要从上往下读，确认执行顺序，别只确认"它在那儿"。</p><h3 id=4---proxy-networks-会把整个家庭网段送出去>4. <code>--proxy-networks</code> 会把整个家庭网段送出去</h3><p>这个参数的名字听起来很无辜（&ldquo;代理网络&rdquo;），实际效果是：<strong>这张网里的每一个成员都能访问你家里的整个子网</strong>，
+包括中继。</p><p>我一开始为了"让某台设备能访问某个服务"加上了它，后来发现这是最不该开的东西 ——
+那个服务本身已经有虚拟 IP 了，根本不需要导出整个网段。</p><p>现在已经删掉了，启动脚本里搜不到 <code>--proxy-networks</code>。</p><h3 id=5-wireguard-门户这条路我放弃了>5. WireGuard 门户这条路我放弃了</h3><p>EasyTier 有个 <code>--vpn-portal</code>，能在中继上开一个 WireGuard 服务端，让没有客户端的设备接进来。
+iPhone 那会儿还没搞定原生 App，看起来是个好办法。</p><p>问题是：<strong>门户的私钥和客户端列表都在中继上</strong>。也就是说，拿到中继的 root 权限，
+就等于拿到了一台合法的手机 —— 它可以给自己发一个门户地址，然后以"手机"的身份进来。</p><p>而 mesh 的 ACL 管不到它，因为门户客户端根本不参与 mesh 握手，<strong>没有身份可供匹配，只有一个 IP，
+而那个 IP 是中继自己发的</strong>。</p><p>所以这个方案跟"云服务器必须进不了家里"直接冲突，放弃了。iPhone 最后装的是 EasyTier 官方 iOS 客户端，
+它是一个正常的 mesh 节点，有自己的身份密钥和组身份，比门户那条路干净得多。</p><p>（顺便：那个 App 国区不上架，得用非国区 Apple ID 或者自己装 IPA。）</p><h3 id=6-卸载这件事我做错过一次>6. 卸载这件事，我做错过一次</h3><p>有一次我说要"先把 EasyTier 删了"，结果是我自己误解了上下文 —— 那句话其实是在问"要不要停掉旧的 Tailscale"。
+删完之后两台机器都断了，Caddy 的 <code>/et/</code> 也被我改掉，还顺手把心跳接口的 502 一起带出来了。</p><p>能恢复，是因为<strong>备份里有二进制和 iptables 规则</strong>，不只是配置文件：</p><div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=line><span class=cl>/tmp/easytier-backup-homeserver-&lt;时间&gt;.tgz
+</span></span><span class=line><span class=cl>/tmp/easytier-backup-funnycode-&lt;时间&gt;.tgz
+</span></span></code></pre></div><p>这条教训值得单独写下来：<strong>一个"配置文件备份"不叫备份。</strong>
+真正的状态还包括 <code>/usr/local/bin</code> 里的二进制（恢复时没有它，单元装好了也起不来）、
+<code>iptables-save</code> 出来的防火墙规则（不恢复的话，网通了但门卫没了 —— 这是最坏的组合）、
+以及被这次部署顺手停掉的其他服务。</p><p>所以现在的约定是：<strong>动之前先 <code>iptables-save</code>，二进制一起打包，改 Caddyfile 之前先备份。</strong></p><h3 id=7-资源占用说实话>7. 资源占用说实话</h3><p>EasyTier 一个节点常驻大约 <strong>34 MB</strong> 内存，降不下去。</p><p>我之前给自建服务定的规矩是"常驻不超过 5 MB"，这套东西明显超标。
+与其装完被问"怎么 34 MB"，不如先说：<strong>这是这个产品的固有成本，不是配置问题。</strong>
+心跳监控那种用 systemd timer 的能做到空闲零占用，mesh VPN 做不到 —— 它得一直保持连接。</p><h2 id=十一现在的状态和它的边界>十一、现在的状态和它的边界</h2><p><strong>已经在跑的</strong>（都是实测过的）：</p><pre tabindex=0><code>homeserver  10.1.1.2  running  开机自启  tunnel=wss  25.3ms  0% 丢包
+relay       10.1.1.1  running  开机自启  /et/ → 400（正常）
+easytier-guard  active(exited)  开机自启  ET-GUARD 挂在 INPUT
+ACL  InboundPacketsAllowed 946250 / Dropped 11128
+</code></pre><p><strong>它的边界，说清楚</strong>：</p><ul><li><strong>速度上限是云服务器的 3 Mbps</strong>。SSH、面板、小文件没问题；SMB 传大文件、看视频别想。</li><li><strong>中继是这张网的一个成员</strong>。它能知道谁在线、谁和谁通信、通信量多少 —— 这些元数据躲不掉。
+它读不懂内容（<code>--secure-mode</code>），也进不来（ACL + guard），但它知道你在连。</li><li><strong>它不能替代 Tailscale 的全部功能</strong>。没有 MagicDNS、没有子网路由的图形化管理、没有 exit node 那套东西。
+我现在是两套并存：Tailscale 走能通的网络（手机流量、家里 WiFi），EasyTier 专门对付校园网。
+两套网段不重叠（<code>100.64.0.0/10</code> 和 <code>10.1.1.0/24</code>），互不干扰。</li></ul><p><strong>一条我到现在还没解决的问题</strong>：家里那台如果重启，<code>tun0</code> 起来之前 guard 脚本会失败一次
+（<code>After=easytier-home.service</code> 只保证"服务启动了"，不保证"接口已经就绪"）。
+目前靠 systemd 的重试掩盖过去了，正确的做法是给 guard 加一个"等 tun0 出现"的循环。
+这个还没改，记在这里。</p><hr><p>最后说一句选型的感想。</p><p>这件事真正花时间的不是装软件，而是<strong>搞清楚"到底哪一层被挡了"</strong>。
+如果一开始就去试 ZeroTier、试各种"更强的穿透"，我会在同一个坑里反复摔 ——
+因为病因是 TLS 握手里的一个字符串，跟穿透算法毫无关系。</p><p>诊断清楚之后，方案几乎是自动浮现的：<strong>把隧道伪装成一个普通的 HTTPS 网站，域名用自己的。</strong>
+剩下的都是体力活。</p><p>至于"能不能不经过任何第三方"，答案是不能 —— 家里没有公网 IP、校园网又封域名，
+这两条加起来意味着必须有一台两边都能连到的机器做中转。
+能做的只是把它的权限压到最小：<strong>能借道，不能进门。</strong></p></div><nav class=post-nav><a class=post-nav-item href=/posts/bilibili-mcp-ops/><span class=post-nav-label>← 上一篇</span>
+<span class=post-nav-title>让 AI 直接运营 B 站账号：bilibili-mcp 部署与无头扫码登录</span>
+</a><a class="post-nav-item is-next" href=/posts/heartbeat-monitor/><span class=post-nav-label>下一篇 →</span>
+<span class=post-nav-title>给服务器装一条心电图：机器死了，也要有人告诉你</span></a></nav><section class=comments id=comments><h2 class=comments-title>评论</h2><script src=https://giscus.app/client.js id=giscus-client data-repo=hehehe1234567894/MySuperBlog data-repo-id=R_kgDOUuJ_eg data-category=Announcements data-category-id=DIC_kwDOUuJ_es4DGf-1 data-mapping=pathname data-strict=0 data-reactions-enabled=1 data-emit-metadata=0 data-input-position=top data-theme=preferred_color_scheme data-lang=zh-CN data-loading=lazy crossorigin=anonymous async></script><script>if("preferred_color_scheme"==="preferred_color_scheme"){var isDark,savedTheme=null;try{savedTheme=localStorage.getItem("theme")}catch{}isDark=savedTheme?savedTheme==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches,document.getElementById("giscus-client").setAttribute("data-theme",isDark?"dark_dimmed":"light")}</script><noscript>评论需要 JavaScript（基于 GitHub Discussions，用 GitHub 账号登录即可发言）。</noscript></section></article></main><footer class=foot><div class=foot-flower aria-hidden=true><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><g fill="#f7a8c4"><ellipse cx="12" cy="5.6" rx="2.5" ry="4.1"/><ellipse cx="12" cy="5.6" rx="2.5" ry="4.1" transform="rotate(72 12 12)"/><ellipse cx="12" cy="5.6" rx="2.5" ry="4.1" transform="rotate(144 12 12)"/><ellipse cx="12" cy="5.6" rx="2.5" ry="4.1" transform="rotate(216 12 12)"/><ellipse cx="12" cy="5.6" rx="2.5" ry="4.1" transform="rotate(288 12 12)"/></g><circle cx="12" cy="12" r="1.9" fill="#ef7fa5"/></svg></div><p class=foot-line><span>© 2026 MIEW</span>
+<span class=sep>·</span>
+<span>保留所有权利</span></p><p class="foot-line foot-dim"><span>由 Hugo 强力驱动</span>
+<span class=sep>·</span>
+<a href=/index.xml>RSS</a>
+<span class=sep>·</span>
+<span>MIEW</span></p><div class=girl-inline><img src=/img/kanban-girl_hu_14b212c576bd525d.webp width=240 height=387 alt=看板娘 loading=lazy draggable=false></div></footer><canvas class=sakura id=sakura aria-hidden=true></canvas><div class=girl id=girl-wrap><img id=girl src=/img/kanban-girl_hu_b213b36b3a2f57c9.webp width=300 height=484 alt=看板娘 draggable=false loading=lazy></div><div class=girl-bubble id=girl-bubble role=status aria-live=polite></div><button class=to-top id=to-top type=button aria-label=主页 hidden>
+<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M6 11l6-6 6 6"/></svg>
+</button>
+<script src=/js/sakura.min.2012be65442616bd7a868524fdc6447aa18616693725da01e2dd54d11410170d.js integrity="sha256-IBK+ZUQmFr16hoUk/cZEeqGGFmk3JdoB4t1U0RQQFw0=" defer></script></body></html>
